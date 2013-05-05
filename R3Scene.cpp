@@ -279,6 +279,14 @@ Read(const char *filename, R3Node *node)
         fprintf(stderr, "Unable to parse mesh command %d in file %s\n", command_number, filename);
         return 0;
       }
+      
+      //mark as player car if mesh material is -2, otherwise not player car
+      bool isPlayerCarMesh = false;
+      if (m == -2)
+      {
+		isPlayerCarMesh = true;  
+	  }
+      
 
       // Get material
       R3Material *material = group_materials[depth];
@@ -329,7 +337,8 @@ Read(const char *filename, R3Node *node)
       node->material = material;
       node->shape = shape;
       node->bbox = mesh->bbox;
-
+	  node->isPlayerCarMesh = isPlayerCarMesh;
+	  
       // Insert node
       group_nodes[depth]->bbox.Union(node->bbox);
       group_nodes[depth]->children.push_back(node);

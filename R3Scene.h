@@ -80,6 +80,7 @@ struct R3Node {
   R3Matrix transformation;
   R3Material *material;
   R3Box bbox;
+  bool isPlayerCarMesh;
 };
 
 

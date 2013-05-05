@@ -45,6 +45,14 @@ static int GLUTmouse[2] = { 0, 0 };
 static int GLUTbutton[3] = { 0, 0, 0 };
 static int GLUTmodifiers = 0;
 
+//gameplay variables
+static double playerCarXPos = 0.0;
+static double playerCarYPos = 0.0;
+static double playerCarZPos = 0.0;
+static bool upPressActive = false;
+static bool downPressActive = false;
+static bool leftPressActive = false;
+static bool rightPressActive = false;
 
 
 // GLUT command list
@@ -192,7 +200,8 @@ void LoadCamera(R3Camera *camera)
   // Set projection transformation
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, 0.01, 10000);
+  //gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, 0.01, 10000);
+  gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
 
   // Set camera transformation
   R3Vector t = -(camera->towards);
@@ -313,13 +322,50 @@ void DrawNode(R3Scene *scene, R3Node *node)
   // Push transformation onto stack
   glPushMatrix();
   LoadMatrix(&node->transformation);
+  
+  //if car, update position and translate to it
+  if (node->isPlayerCarMesh)
+  {
+	  if (upPressActive)
+	  {
+		  playerCarZPos += 1.0;
+		  upPressActive = false;
+	  }
+	  else if (downPressActive)
+	  {
+		  playerCarZPos -= 1.0;
+		  downPressActive = false;
+	  }
+	  else if (leftPressActive)
+	  {
+		  playerCarXPos += 1.0;
+		  leftPressActive = false;
+	  }
+	  else if (rightPressActive)
+	  {
+		  playerCarXPos -= 1.0;
+		  rightPressActive = false;
+	  }
+	  glTranslatef(playerCarXPos, playerCarYPos, playerCarZPos);
+  }
+  
 
   // Load material
   if (node->material) LoadMaterial(node->material);
 
   // Draw shape
   if (node->shape) DrawShape(node->shape);
-
+  
+  //if car, reload identity matrix
+  if (node->isPlayerCarMesh) 
+  {
+	  R3Matrix r = R3Matrix(1.0, 0.0, 0.0, 0.0, 
+		0.0, 1.0, 0.0, 0.0,
+		0.0, 0.0, 1.0, 0.0, 
+		0.0, 0.0, 0.0, 1.0);
+	  LoadMatrix(&r);
+   }
+  
   // Draw children nodes
   for (int i = 0; i < (int) node->children.size(); i++) 
     DrawNode(scene, node->children[i]);
@@ -715,6 +761,30 @@ void GLUTSpecial(int key, int x, int y)
   case GLUT_KEY_F1:
     save_image = 1;
     break;
+  case GLUT_KEY_UP:
+    upPressActive = true;
+    downPressActive = false;
+    leftPressActive = false;
+    rightPressActive = false;
+	break;
+  case GLUT_KEY_DOWN:
+    downPressActive = true;
+    upPressActive = false;
+    leftPressActive = false;
+    rightPressActive = false;
+    break;
+  case GLUT_KEY_LEFT:
+    leftPressActive = true;
+    downPressActive = false;
+    upPressActive = false;
+    rightPressActive = false;
+    break;
+  case GLUT_KEY_RIGHT:
+    rightPressActive = true;
+    downPressActive = false;
+    upPressActive = false;
+    leftPressActive = false;
+	break;
   }
 
   // Remember mouse position 
