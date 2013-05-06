@@ -274,15 +274,18 @@ Read(const char *filename, R3Node *node)
     else if (!strcmp(cmd, "mesh")) {
       // Read data
       int m;
+      int n;
       char meshname[256];
-      if (fscanf(fp, "%d%s", &m, meshname) != 2) {
+
+      /* Edited by Teo, to make a new parameter for the mesh inputs in .scn files */
+      if (fscanf(fp, "%d %d %s", &m, &n, meshname) != 3) {
         fprintf(stderr, "Unable to parse mesh command %d in file %s\n", command_number, filename);
         return 0;
       }
       
       //mark as player car if mesh material is -2, otherwise not player car
       bool isPlayerCarMesh = false;
-      if (m == -2)
+      if (n == 1)
       {
 		isPlayerCarMesh = true;  
 	  }
