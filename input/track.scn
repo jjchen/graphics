@@ -11,9 +11,10 @@ camera 0 30 -30   0 -30 30   0 1 0   0.25   1 1000
 
 # A mostly diffuse material
 material   0 0 0   1 1 1  0.2 0.2 0.2   0.0 0.0 0.0  0.0 0.0 0.0  10 1 0 
+material   0 0 0   1 1 1  0.2 0.2 0.2   0.0 0.0 0.0  0.0 0.0 0.0  10 1 texture1.bmp 
 
 # track
-box    0  -10 -1 -10  10 0 10 
+box    1  -10 -1 -10  10 0 10 
 
 #wall 1
 box    0  -10  0 -10  -9 5 10
