@@ -12,6 +12,9 @@ RAYPRO_OBJS=$(RAYPRO_SRCS:.cpp=.o)
 RAYVIEW_SRCS=rayview.cpp R3Scene.cpp
 RAYVIEW_OBJS=$(RAYVIEW_SRCS:.cpp=.o)
 
+DISPLAY_SRCS=display.cpp
+DISPLAY_OBJS=$(DISPLAY_SRCS:.cpp=.o)
+
 #
 # Compile and link options.  You can change the -g to -O to get
 # an optimized, rather than debug, build.
@@ -51,7 +54,7 @@ endif
 
 LIBS=R3/libR3.a R2/libR2.a jpeg/libjpeg.a
 
-all: rayview
+all: rayview display
 
 R3/libR3.a: 
 	    $(MAKE) -C R3
@@ -76,6 +79,10 @@ clean:
 		$(MAKE) -C R2 clean
 		$(MAKE) -C jpeg clean
 
+
+display: $(DISPLAY_OBJS) $(LIBS)
+		rm -f $@
+		$(CXX) $(CXXFLAGS) $^ -lm -o $@ $(GLLIBS)
 
 distclean:  clean
 

@@ -6,7 +6,8 @@ camera 0 25 -25   0 -25 25   0 1 0   0.25   1 1000
 
 
 # One directional light
-#dir_light 0 0 1   0.710 -.580 -0.410   
+#dir_light 0 0 1   0.710 -.580 -0.410
+   
 
 # A mostly diffuse material
 material   0 0 0   1 1 1  0.2 0.2 0.2   0.0 0.0 0.0  0.0 0.0 0.0  10 1 0 

@@ -37,11 +37,25 @@ static int show_camera = 0;
 static int save_image = 0;
 static int quit = 0;
 
+// angle of rotation for the camera direction
+float angle = 0.0f;
 
+// actual vector representing the camera's direction
+float lx=0.0f,lz=-1.0f, ly = 0.0f;
+
+// XZ position of the camera
+float x=0.0f, z=5.0f, y = 1.75f;
+
+// the key states. These variables will be zero
+//when no key is being presses
+float deltaAngle = 0.0f;
+float deltaMove = 0;
+int xOrigin = -1;
 
 // GLUT variables 
 
-static int GLUTwindow = 0;
+int GLUTwindow = 0;
+int subWindow2 = 0;
 static int GLUTwindow_height = 512;
 static int GLUTwindow_width = 512;
 static int GLUTmouse[2] = { 0, 0 };
@@ -681,6 +695,7 @@ void GLUTMainLoop(void)
 void GLUTDrawText(const R3Point& p, const char *s)
 {
   // Draw text string s and position p
+ 
   glRasterPos3d(p[0], p[1], p[2]);
 #ifndef __CYGWIN__
   while (*s) glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *(s++));
@@ -688,7 +703,39 @@ void GLUTDrawText(const R3Point& p, const char *s)
   while (*s) glutBitmapCharacter((void*)7, *(s++));
 #endif
 }
-  
+
+
+void GLUTPrint(double x, double y, char * text)
+{
+  glRasterPos2f(x, y);
+  #ifndef __CYGWIN__
+    while (*text) glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *(text++));
+  #else
+    while (*text) glutBitmapCharacter((void*)7, *(text++));
+  #endif  
+}
+
+void drawText(void)
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, GLUTwindow_width, GLUTwindow_height, 0.0, -1.0, 10.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glColor3f(1.0f,1.0f,1.0f);
+
+    GLUTPrint(200,50,"Time: 00:40s");
+    GLUTPrint(50,400,"Position: 2nd out of 10");
+    GLUTPrint(50,450,"Speed: 60mph");
+    GLUTPrint(400,400,"Track");
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);  
+}
 
 
 void GLUTSaveImage(const char *filename)
@@ -750,14 +797,52 @@ void GLUTResize(int w, int h)
   // Redraw
   glutPostRedisplay();
 }
+void GLUTRedrawHUV(void) {
+  glutSetWindow(subWindow2);
+
+  // Initialize OpenGL drawing modes
+  glEnable(GL_LIGHTING);
+  glDisable(GL_BLEND);
+  glBlendFunc(GL_ONE, GL_ZERO);
+  glDepthMask(true);
+
+  // Clear window 
+  R3Rgb background = scene->background;
+  glClearColor(background[0], background[1], background[2], background[3]);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // Load camera
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  //gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, 0.01, 10000);
+  gluPerspective(2*180.0*camera.yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
+
+  // Set camera transformation
+  R3Vector t = -(camera.towards);
+
+  gluLookAt(0,100,0, 0, 99, 0, t[0], 0, t[1]);
+
+  // Load scene lights
+  LoadLights(scene);
 
 
+  // Draw scene surfaces
+  if (show_faces) {
+    glEnable(GL_LIGHTING);
+    DrawScene(scene);
+  }
 
-void GLUTRedraw(void)
+  // Swap buffers 
+  glutSwapBuffers();
+
+}
+
+void GLUTRedrawMain(void)
 {
-  //update
+	
   Update();
-  
+
+  glutSetWindow(GLUTwindow);
   // Initialize OpenGL drawing modes
   glEnable(GL_LIGHTING);
   glDisable(GL_BLEND);
@@ -775,50 +860,16 @@ void GLUTRedraw(void)
   // Load scene lights
   LoadLights(scene);
 
-  // Draw scene camera
-  DrawCamera(scene);
-
-  // Draw scene lights
-  DrawLights(scene);
-
   // Draw scene surfaces
   if (show_faces) {
     glEnable(GL_LIGHTING);
     DrawScene(scene);
   }
 
-  // Draw scene edges
-  if (show_edges) {
-    glDisable(GL_LIGHTING);
-    glColor3d(1 - background[0], 1 - background[1], 1 - background[2]);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    DrawScene(scene);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-  }
-
-  // Save image
-  if (save_image) {
-    char image_name[256];
-    static int image_number = 1;
-    for (;;) {
-      sprintf(image_name, "image%d.jpg", image_number++);
-      FILE *fp = fopen(image_name, "r");
-      if (!fp) break; 
-      else fclose(fp);
-    }
-    GLUTSaveImage(image_name);
-    printf("Saved %s\n", image_name);
-    save_image = 0;
-  }
-
-  // Quit here so that can save image before exit
-  if (quit) {
-    if (output_image_name) GLUTSaveImage(output_image_name);
-    GLUTStop();
-  }
-
   // Swap buffers 
   glutSwapBuffers();
+  
+   GLUTRedrawHUV();
 }    
 
 void GLUTMotion(int x, int y)
@@ -1103,7 +1154,7 @@ void GLUTInit(int *argc, char **argv)
   // Initialize GLUT callback functions 
   glutIdleFunc(GLUTIdle);
   glutReshapeFunc(GLUTResize);
-  glutDisplayFunc(GLUTRedraw);
+  glutDisplayFunc(GLUTRedrawMain);
   glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
   glutSpecialUpFunc(GLUTSpecialUp);
@@ -1116,8 +1167,10 @@ void GLUTInit(int *argc, char **argv)
   glEnable(GL_DEPTH_TEST);
   glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
  
-  // Create menus
-  GLUTCreateMenu();
+
+  subWindow2 = glutCreateSubWindow(GLUTwindow, 0,0,GLUTwindow_width/3, GLUTwindow_height/3);
+  glutDisplayFunc(GLUTRedrawHUV);
+  glutReshapeFunc(GLUTResize);
 }
 
 
