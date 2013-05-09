@@ -9,7 +9,10 @@
 #include "R3/R3.h"
 #include "R3Scene.h"
 #include "cos426_opengl.h"
+#include <sys/time.h>
 
+void Update();
+double toRads(double degrees);
 
 ////////////////////////////////////////////////////////////
 // GLOBAL VARIABLES
@@ -53,6 +56,24 @@ static bool upPressActive = false;
 static bool downPressActive = false;
 static bool leftPressActive = false;
 static bool rightPressActive = false;
+enum {
+	THIRD_PERSON_VIEW,
+	DRIVER_SEAT_VIEW
+};
+static int currentView = THIRD_PERSON_VIEW;
+static double camYPos = 25;
+static double camZDistance = camYPos;
+
+//gameplay physics variables
+static double carAngle = 0.0;
+static double carSpeed = 0.0;
+static double carAcceleration = 0.0;
+double MAX_SPEED = 60;
+static double ACCELERATION_DUE_TO_GRAVITY = 9.8;
+static double GROUND_FRICTION_COEFFICIENT = 0.7;
+static double FRICTION_ACCELERATION_MAGNITUDE = GROUND_FRICTION_COEFFICIENT * ACCELERATION_DUE_TO_GRAVITY;
+static double FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE = 12.0; 
+static double ANGLE_TURN_RATIO = 0.1;
 
 
 // GLUT command list
@@ -67,6 +88,57 @@ enum {
   QUIT_COMMAND,
 };
 
+/////////////////////////////////////////////////////////////
+// Miscellaneous Functions
+/////////////////////////////////////////////////////////////
+
+/* Returns the seconds since start of execution. */
+static double GetTime(void)
+{
+#ifdef _WIN32
+  // Return number of seconds since start of execution
+  static int first = 1;
+  static LARGE_INTEGER timefreq;
+  static LARGE_INTEGER start_timevalue;
+
+  // Check if this is the first time
+  if (first) {
+    // Initialize first time
+    QueryPerformanceFrequency(&timefreq);
+    QueryPerformanceCounter(&start_timevalue);
+    first = 0;
+    return 0;
+  }
+  else {
+    // Return time since start
+    LARGE_INTEGER current_timevalue;
+    QueryPerformanceCounter(&current_timevalue);
+    return ((double) current_timevalue.QuadPart - 
+            (double) start_timevalue.QuadPart) / 
+            (double) timefreq.QuadPart;
+  }
+#else
+  // Return number of seconds since start of execution
+  static int first = 1;
+  static struct timeval start_timevalue;
+
+  // Check if this is the first time
+  if (first) {
+    // Initialize first time
+    gettimeofday(&start_timevalue, NULL);
+    first = 0;
+    return 0;
+  }
+  else {
+    // Return time since start
+    struct timeval current_timevalue;
+    gettimeofday(&current_timevalue, NULL);
+    int secs = current_timevalue.tv_sec - start_timevalue.tv_sec;
+    int usecs = current_timevalue.tv_usec - start_timevalue.tv_usec;
+    return (double) (secs + 1.0E-6F * usecs);
+  }
+#endif
+}
 
 
 ////////////////////////////////////////////////////////////
@@ -193,6 +265,88 @@ void LoadMaterial(R3Material *material)
   }
 }
 
+double toRads(double degrees)
+{
+	return (3.14159 / 180.0) * degrees;
+}
+//updates objects in world, such as car
+//called at beginning of rendering cycle -- change elseifs to ifs when
+//physics in place
+void Update()
+{
+  // Get current time (in seconds) since start of execution
+  double current_time = GetTime();
+  static double previous_time = 0;
+
+  // program just started up?
+  if (previous_time == 0) previous_time = current_time;
+
+  // time passed since starting
+  double delta_time = current_time - previous_time;
+  
+  //update car position
+  playerCarXPos += carSpeed * sin(toRads(carAngle)) * delta_time; //may need to change to -=
+  playerCarZPos += carSpeed * cos(toRads(carAngle)) * delta_time;
+  
+  //update car speed
+  double newSpeed = carSpeed + carAcceleration * delta_time;
+  
+  //if car acceleration magnitude is equal to ground acceleration magnitude
+  //then check if velocity would change signs after this update, in which case
+  //set the velocity to 0 (friction can't make you change directions by taking you "past" 0)
+  if (abs(carAcceleration) == FRICTION_ACCELERATION_MAGNITUDE)
+  {
+	  bool previousSpeedPositive = (carSpeed >= 0);
+	  bool newSpeedPositive = (newSpeed) >= 0;
+	  if (previousSpeedPositive != newSpeedPositive)
+	  {
+		  carSpeed = 0.0;
+	  }
+	  else
+	  {
+		  carSpeed = newSpeed;
+	  }
+  }
+  else
+  {
+	  carSpeed = newSpeed;
+  }
+  
+  //clamp car speed
+  if (carSpeed > MAX_SPEED) carSpeed = MAX_SPEED;
+  if (carSpeed < -1.0 * MAX_SPEED) carSpeed = -1.0 * MAX_SPEED;
+  
+  //update car acceleration (and reset speed to 0 if press up/down to change directions)
+  if (upPressActive)
+  {
+	  carAcceleration = FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE;
+	  if (carSpeed < 0) carSpeed = 0;
+  }
+  else if (downPressActive)
+  {
+	  carAcceleration = -1.0 * FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE;
+	  if (carSpeed > 0) carSpeed = 0;
+  }
+  else
+  {
+	  carAcceleration = (carSpeed >= 0.0) ? -1.0 * FRICTION_ACCELERATION_MAGNITUDE : FRICTION_ACCELERATION_MAGNITUDE;
+  }
+  
+  if (leftPressActive)
+  {
+	  carAngle += ANGLE_TURN_RATIO * carSpeed;
+	  carAngle = fmod(carAngle, 360);
+  }
+  else if (rightPressActive)
+  {
+	  carAngle -= ANGLE_TURN_RATIO * carSpeed;
+	  carAngle = fmod(carAngle, 360);
+  }
+  
+  // update previous time
+  previous_time = current_time;
+}
+
 
 
 void LoadCamera(R3Camera *camera)
@@ -204,14 +358,38 @@ void LoadCamera(R3Camera *camera)
   gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
 
   // Set camera transformation
+  if (currentView == THIRD_PERSON_VIEW)
+  { 
+	 //set camera eye by assuming car at the origin then translating
+	 camera->eye = R3Point(0, camYPos, -1.0 * camZDistance);
+	 camera->eye.Rotate(R3Vector(0.0, 1.0, 0.0), carAngle * (3.14159 / 180.0));
+	 camera->eye += R3Point(playerCarXPos, playerCarYPos, playerCarZPos);
+	 
+	 camera->towards = R3Vector(playerCarXPos - camera->eye[0], playerCarYPos - camera->eye[1], 
+		playerCarZPos - camera->eye[2]);
+	 camera->towards.Normalize();
+	 camera->up = R3Vector(0.0, 1.0, 0.0);
+	 camera->right = camera->towards % camera->up;
+	 camera->right.Normalize();
+	 camera->up = camera->right % camera->towards;
+	 camera->up.Normalize();
+  }
+  //when implement first person, add code here
+  else
+  {
+	  
+  }
+  
   R3Vector t = -(camera->towards);
   R3Vector& u = camera->up;
   R3Vector& r = camera->right;
+  
   GLdouble camera_matrix[16] = { r[0], u[0], t[0], 0, r[1], u[1], t[1], 0, r[2], u[2], t[2], 0, 0, 0, 0, 1 };
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
   glMultMatrixd(camera_matrix);
   glTranslated(-(camera->eye[0]), -(camera->eye[1]), -(camera->eye[2]));
+  //glRotatef(-1.0 * carAngle * 1000.0 / (R3Distance(camera->eye, R3Point(playerCarXPos, playerCarYPos, playerCarZPos))) , 0.0, 1.0, 0.0);
 }
 
 
@@ -326,27 +504,8 @@ void DrawNode(R3Scene *scene, R3Node *node)
   //if car, update position and translate to it
   if (node->isPlayerCarMesh)
   {
-	  if (upPressActive)
-	  {
-		  playerCarZPos += 1.0;
-		  upPressActive = false;
-	  }
-	  else if (downPressActive)
-	  {
-		  playerCarZPos -= 1.0;
-		  downPressActive = false;
-	  }
-	  else if (leftPressActive)
-	  {
-		  playerCarXPos += 1.0;
-		  leftPressActive = false;
-	  }
-	  else if (rightPressActive)
-	  {
-		  playerCarXPos -= 1.0;
-		  rightPressActive = false;
-	  }
 	  glTranslatef(playerCarXPos, playerCarYPos, playerCarZPos);
+	  glRotatef(carAngle, 0.0, 1.0, 0.0);
   }
   
 
@@ -596,6 +755,9 @@ void GLUTResize(int w, int h)
 
 void GLUTRedraw(void)
 {
+  //update
+  Update();
+  
   // Initialize OpenGL drawing modes
   glEnable(GL_LIGHTING);
   glDisable(GL_BLEND);
@@ -658,8 +820,6 @@ void GLUTRedraw(void)
   // Swap buffers 
   glutSwapBuffers();
 }    
-
-
 
 void GLUTMotion(int x, int y)
 {
@@ -764,25 +924,17 @@ void GLUTSpecial(int key, int x, int y)
   case GLUT_KEY_UP:
     upPressActive = true;
     downPressActive = false;
-    leftPressActive = false;
-    rightPressActive = false;
 	break;
   case GLUT_KEY_DOWN:
     downPressActive = true;
     upPressActive = false;
-    leftPressActive = false;
-    rightPressActive = false;
     break;
   case GLUT_KEY_LEFT:
     leftPressActive = true;
-    downPressActive = false;
-    upPressActive = false;
     rightPressActive = false;
     break;
   case GLUT_KEY_RIGHT:
     rightPressActive = true;
-    downPressActive = false;
-    upPressActive = false;
     leftPressActive = false;
 	break;
   }
@@ -798,7 +950,37 @@ void GLUTSpecial(int key, int x, int y)
   glutPostRedisplay();
 }
 
+void GLUTSpecialUp(int key, int x, int y)
+{
+  // Invert y coordinate
+  y = GLUTwindow_height - y;
 
+  // Process keyboard button event 
+  switch (key) {
+  case GLUT_KEY_UP:
+    upPressActive = false;
+	break;
+  case GLUT_KEY_DOWN:
+    downPressActive = false;
+    break;
+  case GLUT_KEY_LEFT:
+    leftPressActive = false;
+    break;
+  case GLUT_KEY_RIGHT:
+    rightPressActive = false;
+	break;
+  }
+
+  // Remember mouse position 
+  GLUTmouse[0] = x;
+  GLUTmouse[1] = y;
+
+  // Remember modifiers 
+  GLUTmodifiers = glutGetModifiers();
+
+  // Redraw
+  glutPostRedisplay();
+}
 
 void GLUTKeyboard(unsigned char key, int x, int y)
 {
@@ -899,7 +1081,15 @@ void GLUTCreateMenu(void)
   glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
 
+void GLUTIdle(void)
+{
+  // Set current window
+  if ( glutGetWindow() != GLUTwindow ) 
+    glutSetWindow(GLUTwindow);  
 
+  // Redraw
+  glutPostRedisplay();
+}
 
 void GLUTInit(int *argc, char **argv)
 {
@@ -911,10 +1101,12 @@ void GLUTInit(int *argc, char **argv)
   GLUTwindow = glutCreateWindow("OpenGL Viewer");
 
   // Initialize GLUT callback functions 
+  glutIdleFunc(GLUTIdle);
   glutReshapeFunc(GLUTResize);
   glutDisplayFunc(GLUTRedraw);
   glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
+  glutSpecialUpFunc(GLUTSpecialUp);
   glutMouseFunc(GLUTMouse);
   glutMotionFunc(GLUTMotion);
 
