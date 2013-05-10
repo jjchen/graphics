@@ -80,13 +80,13 @@ struct R3Node {
   R3Matrix transformation;
   R3Material *material;
   R3Box bbox;
-  bool isPlayerCarMesh;
+  
+  // Changing this. -1 means it's not a car.
+  // 0 and onwards indicates the position in the car array.
+  int isPlayerCarMesh;
 };
 
-
-
 // Scene graph definition
-
 struct R3Scene {
  public:
   // Constructor functions
