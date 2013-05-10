@@ -23,8 +23,6 @@ double toRads(double degrees);
 static char *input_scene_name = NULL;
 static char *output_image_name = NULL;
 
-
-
 // Display variables
 
 static R3Scene *scene = NULL;
@@ -154,7 +152,6 @@ static double GetTime(void)
 #endif
 }
 
-
 ////////////////////////////////////////////////////////////
 // SCENE DRAWING CODE
 ////////////////////////////////////////////////////////////
@@ -181,8 +178,6 @@ void LoadMatrix(R3Matrix *matrix)
   R3Matrix m = matrix->Transpose();
   glMultMatrixd((double *) &m);
 }
-
-
 
 void LoadMaterial(R3Material *material) 
 {
@@ -361,8 +356,6 @@ void Update()
   previous_time = current_time;
 }
 
-
-
 void LoadCamera(R3Camera *camera)
 {
   // Set projection transformation
@@ -405,8 +398,6 @@ void LoadCamera(R3Camera *camera)
   glTranslated(-(camera->eye[0]), -(camera->eye[1]), -(camera->eye[2]));
   //glRotatef(-1.0 * carAngle * 1000.0 / (R3Distance(camera->eye, R3Point(playerCarXPos, playerCarYPos, playerCarZPos))) , 0.0, 1.0, 0.0);
 }
-
-
 
 void LoadLights(R3Scene *scene)
 {
@@ -507,8 +498,6 @@ void LoadLights(R3Scene *scene)
   }
 }
 
-
-
 void DrawNode(R3Scene *scene, R3Node *node)
 {
   // Push transformation onto stack
@@ -554,8 +543,6 @@ void DrawNode(R3Scene *scene, R3Node *node)
     if (lighting) glEnable(GL_LIGHTING);
   }
 }
-
-
 
 void DrawLights(R3Scene *scene)
 {
@@ -629,8 +616,6 @@ void DrawLights(R3Scene *scene)
   if (lighting) glEnable(GL_LIGHTING);
 }
 
-
-
 void DrawCamera(R3Scene *scene)
 {
   // Check if should draw lights
@@ -670,15 +655,11 @@ void DrawCamera(R3Scene *scene)
   if (lighting) glEnable(GL_LIGHTING);
 }
 
-
-
 void DrawScene(R3Scene *scene) 
 {
   // Draw nodes recursively
   DrawNode(scene, scene->root);
 }
-
-
 
 ////////////////////////////////////////////////////////////
 // GLUT USER INTERFACE CODE
@@ -689,8 +670,6 @@ void GLUTMainLoop(void)
   // Run main loop -- never returns 
   glutMainLoop();
 }
-
-
 
 void GLUTDrawText(const R3Point& p, const char *s)
 {
@@ -727,46 +706,15 @@ void drawText(void)
     glClear(GL_DEPTH_BUFFER_BIT);
     glColor3f(1.0f,1.0f,1.0f);
 
-    GLUTPrint(200,50,"Time: 00:40s");
-    GLUTPrint(50,400,"Position: 2nd out of 10");
-    GLUTPrint(50,450,"Speed: 60mph");
-    GLUTPrint(400,400,"Track");
+    GLUTPrint(200, 50, (char*) "Time: 00:40s");
+    GLUTPrint(50, 400, (char*) "Position: 2nd out of 10");
+    GLUTPrint(50, 450, (char*) "Speed: 60mph");
+    GLUTPrint(400, 400, (char*) "Track");
 
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  
 }
-
-
-void GLUTSaveImage(const char *filename)
-{ 
-  // Create image
-  R2Image image(GLUTwindow_width, GLUTwindow_height);
-
-  // Read screen into buffer
-  GLfloat *pixels = new GLfloat [ 3 * GLUTwindow_width * GLUTwindow_height ];
-  glReadPixels(0, 0, GLUTwindow_width, GLUTwindow_height, GL_RGB, GL_FLOAT, pixels);
-
-  // Load pixels from frame buffer
-  GLfloat *pixelsp = pixels;
-  for (int j = 0; j < GLUTwindow_height; j++) {
-    for (int i = 0; i < GLUTwindow_width; i++) {
-      double r = (double) *(pixelsp++);
-      double g = (double) *(pixelsp++);
-      double b = (double) *(pixelsp++);
-      R2Pixel pixel(r, g, b, 1);
-      image.SetPixel(i, j, pixel);
-    }
-  }
-
-  // Write image to file
-  image.Write(filename);
-
-  // Delete buffer
-  delete [] pixels;
-}
-
-
 
 void GLUTStop(void)
 {
@@ -779,8 +727,6 @@ void GLUTStop(void)
   // Exit
   exit(0);
 }
-
-
 
 void GLUTResize(int w, int h)
 {
@@ -797,6 +743,7 @@ void GLUTResize(int w, int h)
   // Redraw
   glutPostRedisplay();
 }
+
 void GLUTRedrawHUV(void) {
   glutSetWindow(subWindow2);
 
@@ -839,7 +786,6 @@ void GLUTRedrawHUV(void) {
 
 void GLUTRedrawMain(void)
 {
-	
   Update();
 
   glutSetWindow(GLUTwindow);
@@ -928,40 +874,6 @@ void GLUTMotion(int x, int y)
   GLUTmouse[1] = y;
 }
 
-
-
-void GLUTMouse(int button, int state, int x, int y)
-{
-  // Invert y coordinate
-  y = GLUTwindow_height - y;
-  
-  // Process mouse button event
-  if (state == GLUT_DOWN) {
-    if (button == GLUT_LEFT_BUTTON) {
-    }
-    else if (button == GLUT_MIDDLE_BUTTON) {
-    }
-    else if (button == GLUT_RIGHT_BUTTON) {
-    }
-  }
-
-  // Remember button state 
-  int b = (button == GLUT_LEFT_BUTTON) ? 0 : ((button == GLUT_MIDDLE_BUTTON) ? 1 : 2);
-  GLUTbutton[b] = (state == GLUT_DOWN) ? 1 : 0;
-
-  // Remember modifiers 
-  GLUTmodifiers = glutGetModifiers();
-
-   // Remember mouse position 
-  GLUTmouse[0] = x;
-  GLUTmouse[1] = y;
-
-  // Redraw
-  glutPostRedisplay();
-}
-
-
-
 void GLUTSpecial(int key, int x, int y)
 {
   // Invert y coordinate
@@ -1033,105 +945,6 @@ void GLUTSpecialUp(int key, int x, int y)
   glutPostRedisplay();
 }
 
-void GLUTKeyboard(unsigned char key, int x, int y)
-{
-  // Invert y coordinate
-  y = GLUTwindow_height - y;
-
-  // Process keyboard button event 
-  switch (key) {
-  case 'B':
-  case 'b':
-    show_bboxes = !show_bboxes;
-    break;
-
-  case 'C':
-  case 'c':
-    show_camera = !show_camera;
-    break;
-
-  case 'E':
-  case 'e':
-    show_edges = !show_edges;
-    break;
-
-  case 'F':
-  case 'f':
-    show_faces = !show_faces;
-    break;
-
-  case 'L':
-  case 'l':
-    show_lights = !show_lights;
-    break;
-
-  case 'Q':
-  case 'q':
-  case 27: // ESCAPE
-    quit = 1;
-    break;
-
-  case ' ': {
-    printf("camera %g %g %g  %g %g %g  %g %g %g  %g  %g %g \n",
-           camera.eye[0], camera.eye[1], camera.eye[2], 
-           camera.towards[0], camera.towards[1], camera.towards[2], 
-           camera.up[0], camera.up[1], camera.up[2], 
-           camera.xfov, camera.neardist, camera.fardist); 
-    break; }
-  }
-
-  // Remember mouse position 
-  GLUTmouse[0] = x;
-  GLUTmouse[1] = y;
-
-  // Remember modifiers 
-  GLUTmodifiers = glutGetModifiers();
-
-  // Redraw
-  glutPostRedisplay();
-}
-
-
-
-void GLUTCommand(int cmd)
-{
-  // Execute command
-  switch (cmd) {
-  case DISPLAY_FACE_TOGGLE_COMMAND: show_faces = !show_faces; break;
-  case DISPLAY_EDGE_TOGGLE_COMMAND: show_edges = !show_edges; break;
-  case DISPLAY_BBOXES_TOGGLE_COMMAND: show_bboxes = !show_bboxes; break;
-  case DISPLAY_LIGHTS_TOGGLE_COMMAND: show_lights = !show_lights; break;
-  case DISPLAY_CAMERA_TOGGLE_COMMAND: show_camera = !show_camera; break;
-  case SAVE_IMAGE_COMMAND: save_image = 1; break;
-  case QUIT_COMMAND: quit = 1; break;
-  }
-
-  // Mark window for redraw
-  glutPostRedisplay();
-}
-
-
-
-void GLUTCreateMenu(void)
-{
-  // Display sub-menu
-  int display_menu = glutCreateMenu(GLUTCommand);
-  glutAddMenuEntry("Faces (F)", DISPLAY_FACE_TOGGLE_COMMAND);
-  glutAddMenuEntry("Edges (E)", DISPLAY_EDGE_TOGGLE_COMMAND);
-  glutAddMenuEntry("Bounding boxes (B)", DISPLAY_BBOXES_TOGGLE_COMMAND);
-  glutAddMenuEntry("Lights (L)", DISPLAY_LIGHTS_TOGGLE_COMMAND);
-  glutAddMenuEntry("Camera (C)", DISPLAY_CAMERA_TOGGLE_COMMAND);
-
-  // Main menu
-  glutCreateMenu(GLUTCommand);
-  glutAddSubMenu("Display", display_menu);
-  glutAddMenuEntry("Save Image (F1)", SAVE_IMAGE_COMMAND);
-  glutAddMenuEntry("Quit", QUIT_COMMAND);
-
-  // Attach main menu to right mouse button
-  glutAttachMenu(GLUT_RIGHT_BUTTON);
-}
-
 void GLUTIdle(void)
 {
   // Set current window
@@ -1155,10 +968,8 @@ void GLUTInit(int *argc, char **argv)
   glutIdleFunc(GLUTIdle);
   glutReshapeFunc(GLUTResize);
   glutDisplayFunc(GLUTRedrawMain);
-  glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
   glutSpecialUpFunc(GLUTSpecialUp);
-  glutMouseFunc(GLUTMouse);
   glutMotionFunc(GLUTMotion);
 
   // Initialize graphics modes 
