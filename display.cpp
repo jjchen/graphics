@@ -3,10 +3,69 @@
 //show change of glVertex3f
 //show change of idle function, diable the loadIdentity in the display function
 #include "cos426_opengl.h"
+#include <stdio.h>
+
+
+
+#ifdef _WIN32
+#  include <windows.h>
+#else
+#  include <sys/time.h>
+#endif
+
+static double GetTime(void)
+{
+#ifdef _WIN32
+  // Return number of seconds since start of execution
+  static int first = 1;
+  static LARGE_INTEGER timefreq;
+  static LARGE_INTEGER start_timevalue;
+
+  // Check if this is the first time
+  if (first) {
+    // Initialize first time
+    QueryPerformanceFrequency(&timefreq);
+    QueryPerformanceCounter(&start_timevalue);
+    first = 0;
+    return 0;
+  }
+  else {
+    // Return time since start
+    LARGE_INTEGER current_timevalue;
+    QueryPerformanceCounter(&current_timevalue);
+    return ((double) current_timevalue.QuadPart - 
+            (double) start_timevalue.QuadPart) / 
+            (double) timefreq.QuadPart;
+  }
+#else
+  // Return number of seconds since start of execution
+  static int first = 1;
+  static struct timeval start_timevalue;
+
+  // Check if this is the first time
+  if (first) {
+    // Initialize first time
+    gettimeofday(&start_timevalue, NULL);
+    first = 0;
+    return 0;
+  }
+  else {
+    // Return time since start
+    struct timeval current_timevalue;
+    gettimeofday(&current_timevalue, NULL);
+    int secs = current_timevalue.tv_sec - start_timevalue.tv_sec;
+    int usecs = current_timevalue.tv_usec - start_timevalue.tv_usec;
+    return (double) (secs + 1.0E-6F * usecs);
+  }
+#endif
+}
 
 static int spin = 0;
 double width;
 double height;
+char time_str[50];
+char lap_str[50];
+int lap = 1;
 
 void init(void) 
 {
@@ -56,21 +115,82 @@ void drawText(void)
     glLoadIdentity();
 
     glClear(GL_DEPTH_BUFFER_BIT);
-    glColor3f(1.0f,1.0f,1.0f);
+    glColor3d(1.0f, 0.0f, 0.0f);
 
-    GLUTPrint(200,50,"Time: 00:40s");
+    double curtime = GetTime();
+    static double prevtime = 0;
+    if (prevtime == 0) prevtime = curtime;
+    if (curtime - prevtime > 0.01) {
+      sprintf(time_str, "Time: %4.1f", curtime);
+      prevtime = curtime;
+    }
+
+    sprintf(lap_str, "Lap: %d of 3", lap);
+
+    GLUTPrint(200,50, time_str);
     GLUTPrint(50,400,"Position: 2nd out of 10");
     GLUTPrint(50,450,"Speed: 60mph");
-    GLUTPrint(400,400,"Track");
+    GLUTPrint(385,360,"Track");
+    GLUTPrint(400,50, lap_str);
+
+    glBegin(GL_QUADS);
+        glColor3d(1.0f, 0.0f, 0.0f);
+        glVertex2f(380, 380); // vertex 1
+        glVertex2f(380, 475); // vertex 2
+        glVertex2f(475, 475); // vertex 3
+        glVertex2f(475, 380); // vertex 4
+    glEnd();
 
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  
 }
 
+void drawText(char* text)
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, 500, 500, 0.0, -1.0, 10.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+
+    GLUTPrint(225, 225, text);
+    glBegin(GL_QUADS);
+        glVertex2f(200, 350); // vertex 1
+        glVertex2f(200, 400); // vertex 2
+        glVertex2f(300, 400); // vertex 3
+        glVertex2f(300, 350); // vertex 4
+    glEnd();
+    glColor3f(1.0f,0.5f,0.5f);
+
+    GLUTPrint(200, 350, "HII");
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);  
+}
+
+
+
+void displayEnd(void){
+   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+   glPushMatrix ();
+   glTranslatef (0.0, 0.0, -5.0);
+   drawText("END!");
+   glPopMatrix ();
+   glFlush ();
+}
+
 void display(void)
 {
-  GLfloat position[] = { 0.0, 0.0, 1.5, 1.0 };
+   if (lap == 3) {
+    displayEnd();
+    return;
+   }
+
+   GLfloat position[] = { 0.0, 0.0, 1.5, 1.0 };
 
    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -96,7 +216,7 @@ void display(void)
    glPopMatrix ();
 
    glFlush ();
-
+   glutPostRedisplay();
 
 }
 
@@ -118,8 +238,14 @@ void mouse(int button, int state, int x, int y)
 {
    switch (button) {
       case GLUT_LEFT_BUTTON:
+         if (lap == 3 && x < 300 && x > 200 && y < 400 && y > 350) {
+          lap = 1;
+          spin = 0;
+          break;
+         } 
          if (state == GLUT_DOWN) {
             spin = (spin + 30) % 360;
+            if (spin == 0) lap++;
             glutPostRedisplay();
          }
          break;

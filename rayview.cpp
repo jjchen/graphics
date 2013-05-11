@@ -10,6 +10,11 @@
 #include "R3Scene.h"
 #include "cos426_opengl.h"
 #include <sys/time.h>
+#include <map>
+#include <fstream>
+#include <iostream>
+#include "client.h"
+#include "server.h"
 
 void Update();
 double toRads(double degrees);
@@ -21,16 +26,12 @@ double toRads(double degrees);
 // Program arguments
 
 static char *input_scene_name = NULL;
-static char *output_image_name = NULL;
-
-
 
 // Display variables
 
 static R3Scene *scene = NULL;
 static R3Camera camera;
 static int show_faces = 1;
-static int show_edges = 0;
 static int show_bboxes = 0;
 static int show_lights = 0;
 static int show_camera = 0;
@@ -63,17 +64,37 @@ static int GLUTbutton[3] = { 0, 0, 0 };
 static int GLUTmodifiers = 0;
 
 //gameplay variables
+// Player car
 static double playerCarXPos = 0.0;
 static double playerCarYPos = 0.0;
 static double playerCarZPos = 0.0;
+
+// Other car
+static double otherCarXPos = 0.0;
+static double otherCarYPos = 0.0;
+static double otherCarZPos = 0.0;
+static double otherCarTheta = 0.0;
+
+// Keys
 static bool upPressActive = false;
 static bool downPressActive = false;
 static bool leftPressActive = false;
 static bool rightPressActive = false;
+
+// More networking variables
+map<char*, char*> config_map;
+static bool connected = false;
+static bool is_client = false;
+static char* ip_address;
+static int port;
+static bool use_networking = false;
+static int socket_desc;
+
 enum {
 	THIRD_PERSON_VIEW,
 	DRIVER_SEAT_VIEW
 };
+
 static int currentView = THIRD_PERSON_VIEW;
 static double camYPos = 25;
 static double camZDistance = camYPos;
@@ -154,7 +175,6 @@ static double GetTime(void)
 #endif
 }
 
-
 ////////////////////////////////////////////////////////////
 // SCENE DRAWING CODE
 ////////////////////////////////////////////////////////////
@@ -181,8 +201,6 @@ void LoadMatrix(R3Matrix *matrix)
   R3Matrix m = matrix->Transpose();
   glMultMatrixd((double *) &m);
 }
-
-
 
 void LoadMaterial(R3Material *material) 
 {
@@ -361,8 +379,6 @@ void Update()
   previous_time = current_time;
 }
 
-
-
 void LoadCamera(R3Camera *camera)
 {
   // Set projection transformation
@@ -404,8 +420,6 @@ void LoadCamera(R3Camera *camera)
   glMultMatrixd(camera_matrix);
   glTranslated(-(camera->eye[0]), -(camera->eye[1]), -(camera->eye[2]));
 }
-
-
 
 void LoadLights(R3Scene *scene)
 {
@@ -506,8 +520,6 @@ void LoadLights(R3Scene *scene)
   }
 }
 
-
-
 void DrawNode(R3Scene *scene, R3Node *node)
 {
   // Push transformation onto stack
@@ -553,8 +565,6 @@ void DrawNode(R3Scene *scene, R3Node *node)
     if (lighting) glEnable(GL_LIGHTING);
   }
 }
-
-
 
 void DrawLights(R3Scene *scene)
 {
@@ -628,8 +638,6 @@ void DrawLights(R3Scene *scene)
   if (lighting) glEnable(GL_LIGHTING);
 }
 
-
-
 void DrawCamera(R3Scene *scene)
 {
   // Check if should draw lights
@@ -669,15 +677,11 @@ void DrawCamera(R3Scene *scene)
   if (lighting) glEnable(GL_LIGHTING);
 }
 
-
-
 void DrawScene(R3Scene *scene) 
 {
   // Draw nodes recursively
   DrawNode(scene, scene->root);
 }
-
-
 
 ////////////////////////////////////////////////////////////
 // GLUT USER INTERFACE CODE
@@ -688,8 +692,6 @@ void GLUTMainLoop(void)
   // Run main loop -- never returns 
   glutMainLoop();
 }
-
-
 
 void GLUTDrawText(const R3Point& p, const char *s)
 {
@@ -726,46 +728,15 @@ void drawText(void)
     glClear(GL_DEPTH_BUFFER_BIT);
     glColor3f(1.0f,1.0f,1.0f);
 
-    GLUTPrint(200,50,"Time: 00:40s");
-    GLUTPrint(50,400,"Position: 2nd out of 10");
-    GLUTPrint(50,450,"Speed: 60mph");
-    GLUTPrint(400,400,"Track");
+    GLUTPrint(200, 50, (char*) "Time: 00:40s");
+    GLUTPrint(50, 400, (char*) "Position: 2nd out of 10");
+    GLUTPrint(50, 450, (char*) "Speed: 60mph");
+    GLUTPrint(400, 400, (char*) "Track");
 
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  
 }
-
-
-void GLUTSaveImage(const char *filename)
-{ 
-  // Create image
-  R2Image image(GLUTwindow_width, GLUTwindow_height);
-
-  // Read screen into buffer
-  GLfloat *pixels = new GLfloat [ 3 * GLUTwindow_width * GLUTwindow_height ];
-  glReadPixels(0, 0, GLUTwindow_width, GLUTwindow_height, GL_RGB, GL_FLOAT, pixels);
-
-  // Load pixels from frame buffer
-  GLfloat *pixelsp = pixels;
-  for (int j = 0; j < GLUTwindow_height; j++) {
-    for (int i = 0; i < GLUTwindow_width; i++) {
-      double r = (double) *(pixelsp++);
-      double g = (double) *(pixelsp++);
-      double b = (double) *(pixelsp++);
-      R2Pixel pixel(r, g, b, 1);
-      image.SetPixel(i, j, pixel);
-    }
-  }
-
-  // Write image to file
-  image.Write(filename);
-
-  // Delete buffer
-  delete [] pixels;
-}
-
-
 
 void GLUTStop(void)
 {
@@ -778,8 +749,6 @@ void GLUTStop(void)
   // Exit
   exit(0);
 }
-
-
 
 void GLUTResize(int w, int h)
 {
@@ -796,6 +765,7 @@ void GLUTResize(int w, int h)
   // Redraw
   glutPostRedisplay();
 }
+
 void GLUTRedrawHUV(void) {
   glutSetWindow(subWindow2);
 
@@ -838,7 +808,6 @@ void GLUTRedrawHUV(void) {
 
 void GLUTRedrawMain(void)
 {
-	
   Update();
 
   glutSetWindow(GLUTwindow);
@@ -869,6 +838,29 @@ void GLUTRedrawMain(void)
   glutSwapBuffers();
   
    GLUTRedrawHUV();
+  
+  // Network Stuff
+  fprintf(stderr, "about to listen\n");
+  if (connected) {
+      if (is_client) {
+          char* data = "opinions!\n";
+          if (write(data, socket_desc) == 0) {
+              fprintf(stderr, "Successful client send (probably)\n");
+          }
+          else {
+              fprintf(stderr, "Couldn't send to server!\n");
+          }
+      }
+      else {
+         char* data_received = receive(socket_desc);
+         if (data_received != NULL) {
+             fprintf(stderr, "Got data: %s\n", data_received);
+         }
+         else {
+             fprintf(stderr, "No data... ;(\n");
+         }
+      }
+  }
 }    
 
 void GLUTMotion(int x, int y)
@@ -926,40 +918,6 @@ void GLUTMotion(int x, int y)
   GLUTmouse[0] = x;
   GLUTmouse[1] = y;
 }
-
-
-
-void GLUTMouse(int button, int state, int x, int y)
-{
-  // Invert y coordinate
-  y = GLUTwindow_height - y;
-  
-  // Process mouse button event
-  if (state == GLUT_DOWN) {
-    if (button == GLUT_LEFT_BUTTON) {
-    }
-    else if (button == GLUT_MIDDLE_BUTTON) {
-    }
-    else if (button == GLUT_RIGHT_BUTTON) {
-    }
-  }
-
-  // Remember button state 
-  int b = (button == GLUT_LEFT_BUTTON) ? 0 : ((button == GLUT_MIDDLE_BUTTON) ? 1 : 2);
-  GLUTbutton[b] = (state == GLUT_DOWN) ? 1 : 0;
-
-  // Remember modifiers 
-  GLUTmodifiers = glutGetModifiers();
-
-   // Remember mouse position 
-  GLUTmouse[0] = x;
-  GLUTmouse[1] = y;
-
-  // Redraw
-  glutPostRedisplay();
-}
-
-
 
 void GLUTSpecial(int key, int x, int y)
 {
@@ -1032,105 +990,6 @@ void GLUTSpecialUp(int key, int x, int y)
   glutPostRedisplay();
 }
 
-void GLUTKeyboard(unsigned char key, int x, int y)
-{
-  // Invert y coordinate
-  y = GLUTwindow_height - y;
-
-  // Process keyboard button event 
-  switch (key) {
-  case 'B':
-  case 'b':
-    show_bboxes = !show_bboxes;
-    break;
-
-  case 'C':
-  case 'c':
-    show_camera = !show_camera;
-    break;
-
-  case 'E':
-  case 'e':
-    show_edges = !show_edges;
-    break;
-
-  case 'F':
-  case 'f':
-    show_faces = !show_faces;
-    break;
-
-  case 'L':
-  case 'l':
-    show_lights = !show_lights;
-    break;
-
-  case 'Q':
-  case 'q':
-  case 27: // ESCAPE
-    quit = 1;
-    break;
-
-  case ' ': {
-    printf("camera %g %g %g  %g %g %g  %g %g %g  %g  %g %g \n",
-           camera.eye[0], camera.eye[1], camera.eye[2], 
-           camera.towards[0], camera.towards[1], camera.towards[2], 
-           camera.up[0], camera.up[1], camera.up[2], 
-           camera.xfov, camera.neardist, camera.fardist); 
-    break; }
-  }
-
-  // Remember mouse position 
-  GLUTmouse[0] = x;
-  GLUTmouse[1] = y;
-
-  // Remember modifiers 
-  GLUTmodifiers = glutGetModifiers();
-
-  // Redraw
-  glutPostRedisplay();
-}
-
-
-
-void GLUTCommand(int cmd)
-{
-  // Execute command
-  switch (cmd) {
-  case DISPLAY_FACE_TOGGLE_COMMAND: show_faces = !show_faces; break;
-  case DISPLAY_EDGE_TOGGLE_COMMAND: show_edges = !show_edges; break;
-  case DISPLAY_BBOXES_TOGGLE_COMMAND: show_bboxes = !show_bboxes; break;
-  case DISPLAY_LIGHTS_TOGGLE_COMMAND: show_lights = !show_lights; break;
-  case DISPLAY_CAMERA_TOGGLE_COMMAND: show_camera = !show_camera; break;
-  case SAVE_IMAGE_COMMAND: save_image = 1; break;
-  case QUIT_COMMAND: quit = 1; break;
-  }
-
-  // Mark window for redraw
-  glutPostRedisplay();
-}
-
-
-
-void GLUTCreateMenu(void)
-{
-  // Display sub-menu
-  int display_menu = glutCreateMenu(GLUTCommand);
-  glutAddMenuEntry("Faces (F)", DISPLAY_FACE_TOGGLE_COMMAND);
-  glutAddMenuEntry("Edges (E)", DISPLAY_EDGE_TOGGLE_COMMAND);
-  glutAddMenuEntry("Bounding boxes (B)", DISPLAY_BBOXES_TOGGLE_COMMAND);
-  glutAddMenuEntry("Lights (L)", DISPLAY_LIGHTS_TOGGLE_COMMAND);
-  glutAddMenuEntry("Camera (C)", DISPLAY_CAMERA_TOGGLE_COMMAND);
-
-  // Main menu
-  glutCreateMenu(GLUTCommand);
-  glutAddSubMenu("Display", display_menu);
-  glutAddMenuEntry("Save Image (F1)", SAVE_IMAGE_COMMAND);
-  glutAddMenuEntry("Quit", QUIT_COMMAND);
-
-  // Attach main menu to right mouse button
-  glutAttachMenu(GLUT_RIGHT_BUTTON);
-}
-
 void GLUTIdle(void)
 {
   // Set current window
@@ -1154,10 +1013,8 @@ void GLUTInit(int *argc, char **argv)
   glutIdleFunc(GLUTIdle);
   glutReshapeFunc(GLUTResize);
   glutDisplayFunc(GLUTRedrawMain);
-  glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
   glutSpecialUpFunc(GLUTSpecialUp);
-  glutMouseFunc(GLUTMouse);
   glutMotionFunc(GLUTMotion);
 
   // Initialize graphics modes 
@@ -1170,10 +1027,8 @@ void GLUTInit(int *argc, char **argv)
   subWindow2 = glutCreateSubWindow(GLUTwindow, 0,0,GLUTwindow_width/3, GLUTwindow_height/3);
   glutDisplayFunc(GLUTRedrawHUV);
   glutReshapeFunc(GLUTResize);
+
 }
-
-
-
 
 ////////////////////////////////////////////////////////////
 // SCENE READING
@@ -1221,7 +1076,6 @@ ParseArgs(int argc, char **argv)
     if ((*argv)[0] == '-') {
       if (!strcmp(*argv, "-help")) { print_usage = 1; }
       else if (!strcmp(*argv, "-exit_immediately")) { quit = 1; }
-      else if (!strcmp(*argv, "-output_image")) { argc--; argv++; output_image_name = *argv; }
       else { fprintf(stderr, "Invalid program argument: %s", *argv); exit(1); }
       argv++; argc--;
     }
@@ -1242,37 +1096,136 @@ ParseArgs(int argc, char **argv)
   return 1;
 }
 
+////////////////////////////////////////////////////////////
+// Create config map
+////////////////////////////////////////////////////////////
 
+map<char*, char*> create_config() {
+ /* The code from this is heavily inspired from:
+    http://www.cplusplus.com/doc/tutorial/files/
+    
+    But let's be honest, when you know more than 2-3 languages,
+    you start mixing up how to read files.
+  */
+
+    map<char*, char*> config_map; 
+   
+    ifstream config_file("config.txt");
+    if (config_file.is_open()) {
+        while (config_file.good()) {
+            char line[100] = {0};
+            config_file >> line;
+
+            if (strcmp(line, "") == 0) break;
+            
+            int semicolon_index = -1;
+            int len = strlen(line);
+            for (int i = 0; i < len; i++) {
+                if (line[i] == ':') {
+                    semicolon_index = i;
+                    break;
+                }
+            }
+                
+            char *key = (char*) calloc(100, sizeof(char));
+            char *val = (char*) calloc(100, sizeof(char));
+
+            for (int i = 0; i < semicolon_index; i++) {
+                key[i] = line[i];
+            }
+            int j = 0;
+            for (int i = semicolon_index + 1; i < len; i++) {
+                val[j++] = line[i];
+            }
+            config_map[key] = val;
+        }
+        config_file.close();
+    }
+    else {
+        printf("unable to open file. Assuming defaults.\n");
+    }
+
+    map<char*, char*>::iterator iter;
+    for (iter = config_map.begin(); iter != config_map.end(); iter++) {
+        fprintf(stderr, "[%s] : [%s]\n", iter->first, iter->second);
+
+        if (!strcmp(iter->first, "client")) {
+            if (!strcmp(iter->second, "1")) {
+                is_client = true;
+            }
+            else {
+                is_client = false;
+            }
+        }
+        
+        if (!strcmp(iter->first, "ipaddress")) {
+            ip_address = iter->second;
+        }
+
+        if (!strcmp(iter->first, "port")) {
+            port = atoi(iter->second);
+        }
+        
+        if (!strcmp(iter->first, "network")) {
+            if (!strcmp(iter->second, "1")) {
+                use_networking = true;
+            }
+            else {
+                use_networking = false;
+            }
+        }
+    }
+    
+    return config_map;
+}
 
 ////////////////////////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////////////////////////
 
-int 
-main(int argc, char **argv)
-{
-  // Initialize GLUT
-  GLUTInit(&argc, argv);
+int main(int argc, char **argv) {
+    // Initialize GLUT
+    GLUTInit(&argc, argv);
 
-  // Parse program arguments
-  if (!ParseArgs(argc, argv)) exit(1);
+    // Parse program arguments
+    if (!ParseArgs(argc, argv)) exit(1);
 
-  // Read scene
-  scene = ReadScene(input_scene_name);
-  if (!scene) exit(-1);
+    // Create our config file mapping
+    config_map = create_config();
+    fprintf(stderr, "%d\n", (use_networking) ? 1 : 0);
+    if (use_networking) {
+        if (is_client) {
+            socket_desc = init_client(ip_address, port);
+            if (socket_desc != -1) { 
+                fprintf(stderr, "Successful client init (probably)\n");
+                connected = true;
+            }
+            else {
+                fprintf(stderr, "Could not init client.\n");
+                connected = false;
+            }
+        }
+        else {
+            // code for initializing server.
+            socket_desc = init_server(port);
+            if (socket_desc != -1) {
+                fprintf(stderr, "Successful server init (probably)\n");
+                connected = true;
+            }
+            else {
+                fprintf(stderr, "Could not init server.\n");
+                connected = false;
+            }
+        }
+    }
 
-  // Run GLUT interface
-  GLUTMainLoop();
+    // Read scene
+    scene = ReadScene(input_scene_name);
+    if (!scene) exit(-1);
 
-  // Return success 
-  return 0;
+    // Run GLUT interface
+    GLUTMainLoop();
+
+    // Return success 
+    return 0;
 }
-
-
-
-
-
-
-
-
-
