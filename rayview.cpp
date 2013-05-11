@@ -10,6 +10,11 @@
 #include "R3Scene.h"
 #include "cos426_opengl.h"
 #include <sys/time.h>
+#include <map>
+#include <fstream>
+#include <iostream>
+#include "client.h"
+#include "server.h"
 
 void Update();
 double toRads(double degrees);
@@ -21,14 +26,12 @@ double toRads(double degrees);
 // Program arguments
 
 static char *input_scene_name = NULL;
-static char *output_image_name = NULL;
 
 // Display variables
 
 static R3Scene *scene = NULL;
 static R3Camera camera;
 static int show_faces = 1;
-static int show_edges = 0;
 static int show_bboxes = 0;
 static int show_lights = 0;
 static int show_camera = 0;
@@ -61,17 +64,37 @@ static int GLUTbutton[3] = { 0, 0, 0 };
 static int GLUTmodifiers = 0;
 
 //gameplay variables
+// Player car
 static double playerCarXPos = 0.0;
 static double playerCarYPos = 0.0;
 static double playerCarZPos = 0.0;
+
+// Other car
+static double otherCarXPos = 0.0;
+static double otherCarYPos = 0.0;
+static double otherCarZPos = 0.0;
+static double otherCarTheta = 0.0;
+
+// Keys
 static bool upPressActive = false;
 static bool downPressActive = false;
 static bool leftPressActive = false;
 static bool rightPressActive = false;
+
+// More networking variables
+map<char*, char*> config_map;
+static bool connected = false;
+static bool is_client = false;
+static char* ip_address;
+static int port;
+static bool use_networking = false;
+static int socket_desc;
+
 enum {
 	THIRD_PERSON_VIEW,
 	DRIVER_SEAT_VIEW
 };
+
 static int currentView = THIRD_PERSON_VIEW;
 static double camYPos = 25;
 static double camZDistance = camYPos;
@@ -816,6 +839,29 @@ void GLUTRedrawMain(void)
   glutSwapBuffers();
   
    GLUTRedrawHUV();
+  
+  // Network Stuff
+  fprintf(stderr, "about to listen\n");
+  if (connected) {
+      if (is_client) {
+          char* data = "opinions!\n";
+          if (write(data, socket_desc) == 0) {
+              fprintf(stderr, "Successful client send (probably)\n");
+          }
+          else {
+              fprintf(stderr, "Couldn't send to server!\n");
+          }
+      }
+      else {
+         char* data_received = receive(socket_desc);
+         if (data_received != NULL) {
+             fprintf(stderr, "Got data: %s\n", data_received);
+         }
+         else {
+             fprintf(stderr, "No data... ;(\n");
+         }
+      }
+  }
 }    
 
 void GLUTMotion(int x, int y)
@@ -982,10 +1028,8 @@ void GLUTInit(int *argc, char **argv)
   subWindow2 = glutCreateSubWindow(GLUTwindow, 0,0,GLUTwindow_width/3, GLUTwindow_height/3);
   glutDisplayFunc(GLUTRedrawHUV);
   glutReshapeFunc(GLUTResize);
+
 }
-
-
-
 
 ////////////////////////////////////////////////////////////
 // SCENE READING
@@ -1033,7 +1077,6 @@ ParseArgs(int argc, char **argv)
     if ((*argv)[0] == '-') {
       if (!strcmp(*argv, "-help")) { print_usage = 1; }
       else if (!strcmp(*argv, "-exit_immediately")) { quit = 1; }
-      else if (!strcmp(*argv, "-output_image")) { argc--; argv++; output_image_name = *argv; }
       else { fprintf(stderr, "Invalid program argument: %s", *argv); exit(1); }
       argv++; argc--;
     }
@@ -1054,37 +1097,136 @@ ParseArgs(int argc, char **argv)
   return 1;
 }
 
+////////////////////////////////////////////////////////////
+// Create config map
+////////////////////////////////////////////////////////////
 
+map<char*, char*> create_config() {
+ /* The code from this is heavily inspired from:
+    http://www.cplusplus.com/doc/tutorial/files/
+    
+    But let's be honest, when you know more than 2-3 languages,
+    you start mixing up how to read files.
+  */
+
+    map<char*, char*> config_map; 
+   
+    ifstream config_file("config.txt");
+    if (config_file.is_open()) {
+        while (config_file.good()) {
+            char line[100] = {0};
+            config_file >> line;
+
+            if (strcmp(line, "") == 0) break;
+            
+            int semicolon_index = -1;
+            int len = strlen(line);
+            for (int i = 0; i < len; i++) {
+                if (line[i] == ':') {
+                    semicolon_index = i;
+                    break;
+                }
+            }
+                
+            char *key = (char*) calloc(100, sizeof(char));
+            char *val = (char*) calloc(100, sizeof(char));
+
+            for (int i = 0; i < semicolon_index; i++) {
+                key[i] = line[i];
+            }
+            int j = 0;
+            for (int i = semicolon_index + 1; i < len; i++) {
+                val[j++] = line[i];
+            }
+            config_map[key] = val;
+        }
+        config_file.close();
+    }
+    else {
+        printf("unable to open file. Assuming defaults.\n");
+    }
+
+    map<char*, char*>::iterator iter;
+    for (iter = config_map.begin(); iter != config_map.end(); iter++) {
+        fprintf(stderr, "[%s] : [%s]\n", iter->first, iter->second);
+
+        if (!strcmp(iter->first, "client")) {
+            if (!strcmp(iter->second, "1")) {
+                is_client = true;
+            }
+            else {
+                is_client = false;
+            }
+        }
+        
+        if (!strcmp(iter->first, "ipaddress")) {
+            ip_address = iter->second;
+        }
+
+        if (!strcmp(iter->first, "port")) {
+            port = atoi(iter->second);
+        }
+        
+        if (!strcmp(iter->first, "network")) {
+            if (!strcmp(iter->second, "1")) {
+                use_networking = true;
+            }
+            else {
+                use_networking = false;
+            }
+        }
+    }
+    
+    return config_map;
+}
 
 ////////////////////////////////////////////////////////////
 // MAIN
 ////////////////////////////////////////////////////////////
 
-int 
-main(int argc, char **argv)
-{
-  // Initialize GLUT
-  GLUTInit(&argc, argv);
+int main(int argc, char **argv) {
+    // Initialize GLUT
+    GLUTInit(&argc, argv);
 
-  // Parse program arguments
-  if (!ParseArgs(argc, argv)) exit(1);
+    // Parse program arguments
+    if (!ParseArgs(argc, argv)) exit(1);
 
-  // Read scene
-  scene = ReadScene(input_scene_name);
-  if (!scene) exit(-1);
+    // Create our config file mapping
+    config_map = create_config();
+    fprintf(stderr, "%d\n", (use_networking) ? 1 : 0);
+    if (use_networking) {
+        if (is_client) {
+            socket_desc = init_client(ip_address, port);
+            if (socket_desc != -1) { 
+                fprintf(stderr, "Successful client init (probably)\n");
+                connected = true;
+            }
+            else {
+                fprintf(stderr, "Could not init client.\n");
+                connected = false;
+            }
+        }
+        else {
+            // code for initializing server.
+            socket_desc = init_server(port);
+            if (socket_desc != -1) {
+                fprintf(stderr, "Successful server init (probably)\n");
+                connected = true;
+            }
+            else {
+                fprintf(stderr, "Could not init server.\n");
+                connected = false;
+            }
+        }
+    }
 
-  // Run GLUT interface
-  GLUTMainLoop();
+    // Read scene
+    scene = ReadScene(input_scene_name);
+    if (!scene) exit(-1);
 
-  // Return success 
-  return 0;
+    // Run GLUT interface
+    GLUTMainLoop();
+
+    // Return success 
+    return 0;
 }
-
-
-
-
-
-
-
-
-

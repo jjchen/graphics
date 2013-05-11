@@ -9,7 +9,7 @@
 RAYPRO_SRCS=raypro.cpp raytrace.cpp R3Scene.cpp
 RAYPRO_OBJS=$(RAYPRO_SRCS:.cpp=.o)
 
-RAYVIEW_SRCS=rayview.cpp R3Scene.cpp
+RAYVIEW_SRCS=rayview.cpp R3Scene.cpp client.c server.c
 RAYVIEW_OBJS=$(RAYVIEW_SRCS:.cpp=.o)
 
 DISPLAY_SRCS=display.cpp
