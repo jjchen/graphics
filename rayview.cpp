@@ -840,8 +840,9 @@ void GLUTRedrawMain(void)
    GLUTRedrawHUV();
   
   // Network Stuff
-  fprintf(stderr, "about to listen\n");
   if (connected) {
+      fprintf(stderr, "about to listen/send\n");
+
       if (is_client) {
           char* data = "opinions!\n";
           if (write(data, socket_desc) == 0) {
