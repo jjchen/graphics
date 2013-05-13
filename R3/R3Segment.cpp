@@ -213,13 +213,11 @@ Draw (void) const
   // Draw segment
   const R3Point& p1 = Start();
   const R3Point& p2 = End();
-  GLboolean lighting = glIsEnabled(GL_LIGHTING);
-  glDisable(GL_LIGHTING);
+  glNormal3d(ray.Vector().X(), ray.Vector().Y(), ray.Vector().Z());
   glBegin(GL_LINES);
   glVertex3d(p1.X(), p1.Y(), p1.Z());
   glVertex3d(p2.X(), p2.Y(), p2.Z());
   glEnd();
-  if (lighting) glEnable(GL_LIGHTING);
 }
 
 
