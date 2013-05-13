@@ -27,7 +27,7 @@ int read_count;
 int total_count = 0;
 int len = sizeof(int);
 
-char* receive(int socket_desc) {
+char* server_receive(int socket_desc) {
     /* The select() function allows the process to */
     /* wait for an event to occur and to wake up */
     /* the process when the event occurs. In this */
@@ -110,21 +110,9 @@ char* receive(int socket_desc) {
         //return NULL;
     //}
 
-    /* When the data has been sent, close() */
-    /* the socket descriptor that was returned */
-    /* from the accept() verb and close() the */
-    /* original socket descriptor. */
-    /*****************************************/
-    /* Close the connection to the client and */
-    /* close the server listening socket. */
-    /******************************************/
-    //close(sd2);
-    //close(socket_desc);
-
-    //return 0;
 }
 
-int init_server(int port) {
+int server_init(int port) {
     /* Variable and structure definitions. */
     int socket_desc;
     int on = 1;
@@ -218,4 +206,17 @@ int init_server(int port) {
     printf("Got connection from the f***ing client: %s\n", inet_ntoa(their_addr.sin_addr));
 
     return 0;
+}
+
+void server_close(int socket_desc) {
+    /* When the data has been sent, close() */
+    /* the socket descriptor that was returned */
+    /* from the accept() verb and close() the */
+    /* original socket descriptor. */
+    /*****************************************/
+    /* Close the connection to the client and */
+    /* close the server listening socket. */
+    /******************************************/
+    //close(sd2);
+    close(socket_desc);
 }
