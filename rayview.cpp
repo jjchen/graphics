@@ -913,7 +913,6 @@ void GLUTRedrawMain(void)
   // Swap buffers 
   glFlush();
   glutSwapBuffers();
-  glutPostRedisplay();
   
   // Network Stuff
   if (connected) {
@@ -1255,6 +1254,9 @@ map<char*, char*> create_config() {
 ////////////////////////////////////////////////////////////
 
 int main(int argc, char **argv) {
+
+    //server();
+
     // Initialize GLUT
     GLUTInit(&argc, argv);
 
@@ -1263,12 +1265,11 @@ int main(int argc, char **argv) {
 
     // Create our config file mapping
     config_map = create_config();
-    fprintf(stderr, "%d\n", (use_networking) ? 1 : 0);
     if (use_networking) {
         if (is_client) {
             socket_desc = init_client(ip_address, port);
             if (socket_desc != -1) { 
-                fprintf(stderr, "Successful client init (probably)\n");
+                fprintf(stderr, "Successful client init (probably) with socket desc %d\n", socket_desc);
                 connected = true;
             }
             else {
@@ -1280,7 +1281,7 @@ int main(int argc, char **argv) {
             // code for initializing server.
             socket_desc = init_server(port);
             if (socket_desc != -1) {
-                fprintf(stderr, "Successful server init (probably)\n");
+                fprintf(stderr, "Successful server init (probably) with socket desc %d\n", socket_desc);
                 connected = true;
             }
             else {
