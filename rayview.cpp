@@ -846,7 +846,7 @@ void GLUTRedrawMain(void)
 
       if (is_client) {
           char* data = "opinions!\n";
-          if (write(data, socket_desc) == 0) {
+          if (client_write(data, socket_desc) == 0) {
               fprintf(stderr, "Successful client send (probably)\n");
           }
           else {
@@ -854,7 +854,7 @@ void GLUTRedrawMain(void)
           }
       }
       else {
-         char* data_received = receive(socket_desc);
+         char* data_received = server_receive(socket_desc);
          if (data_received != NULL) {
              fprintf(stderr, "Got data: %s\n", data_received);
          }
@@ -1199,7 +1199,7 @@ int main(int argc, char **argv) {
     config_map = create_config();
     if (use_networking) {
         if (is_client) {
-            socket_desc = init_client(ip_address, port);
+            socket_desc = client_init(ip_address, port);
             if (socket_desc != -1) { 
                 fprintf(stderr, "Successful client init (probably) with socket desc %d\n", socket_desc);
                 connected = true;
@@ -1211,7 +1211,7 @@ int main(int argc, char **argv) {
         }
         else {
             // code for initializing server.
-            socket_desc = init_server(port);
+            socket_desc = server_init(port);
             if (socket_desc != -1) {
                 fprintf(stderr, "Successful server init (probably) with socket desc %d\n", socket_desc);
                 connected = true;
