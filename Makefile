@@ -53,6 +53,8 @@ endif
 #
 
 LIBS=R3/libR3.a R2/libR2.a jpeg/libjpeg.a
+    
+
 
 all: rayview display
 
