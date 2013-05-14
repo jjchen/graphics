@@ -1,4 +1,0 @@
-network:1
-client:0
-port:3111
-ipaddress:10.8.195.166
