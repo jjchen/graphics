@@ -505,7 +505,7 @@ Read(const char *filename, R3Node *node)
 
 	
 		bool isTrack = false;
-		if (m == 1)
+		if (m == 1 || m == 5)
 		{
 			isTrack = true;
 		}
@@ -836,6 +836,15 @@ Read(const char *filename, R3Node *node)
       node->material = NULL;
       node->shape = NULL;
       node->bbox = R3null_box;
+
+      if (m==1)
+      {
+        node->isTrack = 1;
+      }
+      else
+      {
+        node->isTrack = 0;
+      }
 
       // Push node onto stack
       depth++;
