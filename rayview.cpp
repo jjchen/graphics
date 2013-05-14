@@ -65,7 +65,7 @@ static int GLUTmodifiers = 0;
 
 //gameplay variables
 // Player car
-static double playerCarXPos = 0.0;
+static double playerCarXPos = 9.0;
 static double playerCarYPos = 0.0;
 static double playerCarZPos = 0.0;
 
@@ -96,11 +96,11 @@ enum {
 };
 
 static int currentView = THIRD_PERSON_VIEW;
-static double camYPos = 25;
+static double camYPos = 50;
 static double camZDistance = camYPos;
 
 //gameplay physics variables
-static double carAngle = 0.0;
+static double carAngle = 60.0;
 static double carSpeed = 0.0;
 static double carAcceleration = 0.0;
 double MAX_SPEED = 60;
