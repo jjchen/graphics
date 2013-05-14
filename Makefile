@@ -28,7 +28,7 @@ CXXFLAGS=-Wall -I. -g -DUSE_JPEG
 #
 UNAME := $(shell uname)
 ifneq (,$(findstring Darwin,$(UNAME)))
-	GLLIBS = -framework GLUT -framework OpenGL
+	GLLIBS = -framework GLUT -framework OpenGL -framework OpenAL
 else
   ifneq (,$(findstring CYGWIN,$(UNAME)))
 	GLLIBS = -lglut32 -lglu32 -lopengl32
