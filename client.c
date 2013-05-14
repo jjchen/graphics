@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include "client.h"
+#include <fcntl.h>
 
 /* BufferLength is 100 bytes */
 #define BufferLength 100
@@ -51,6 +52,8 @@ int client_init(char* server_addr, int port) {
     }
     else
     	printf("Client-socket() OK\n");
+    
+    fcntl(sd, F_SETFL, O_NONBLOCK);
 
 	memset(&serveraddr, 0x00, sizeof(struct sockaddr_in));
     serveraddr.sin_family = AF_INET;
@@ -82,8 +85,8 @@ int client_init(char* server_addr, int port) {
     /* connect() to server. */
     fprintf(stderr, "rc\n");     
     if((rc = connect(sd, (struct sockaddr *)&serveraddr, sizeof(serveraddr))) < 0) {
-		perror("Client-connect() error");
-		return -1;
+		//perror("Client-connect() error");
+		//return -1;
     }
     else
     	printf("Connection established...\n");

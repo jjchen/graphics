@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 /* BufferLength is 100 bytes */
 #define BufferLength 100
@@ -79,6 +80,9 @@ char* server_receive(int socket_desc) {
     /* Shows the data */
     return buff;
     
+}
+
+int server_write(char* buff, int total_count) {
     /* Echo some bytes of string, back */
     /* to the client by using the write() */
     /* function. */
@@ -86,29 +90,32 @@ char* server_receive(int socket_desc) {
     /* write() some bytes of string, */
     /* back to the client. */
 
-    //printf("Server-Echoing back to client...\n");
-    //read_count = write(sd2, buff, total_count);
+    char temp;
 
-    //if(read_count != total_count) {
-        //perror("Server-write() error");
+    printf("Server-Echoing back to client...\n");
+    read_count = write(sd2, buff, total_count);
+
+    if(read_count != total_count) {
+        perror("Server-write() error");
 
         /* Get the error number. */
-        //read_count = getsockopt(sd2, SOL_SOCKET, SO_ERROR, &temp, (socklen_t*)&len);
+        read_count = getsockopt(sd2, SOL_SOCKET, SO_ERROR, &temp, (socklen_t*)&len);
 
-        //if(read_count == 0) {
+        if(read_count == 0) {
             /* Print out the asynchronously */
             /* received error. */
-            //errno = temp;
-            //perror("SO_ERROR was: ");
-        //}
-        //else
-            //printf("Server-write() is OK\n");
+            errno = temp;
+            perror("SO_ERROR was: ");
+        }
+        else
+            printf("Server-write() is OK\n");
 
         //close(socket_desc);
         //close(sd2);
-        //return NULL;
-    //}
+        return 0;
+    }
 
+    return -1;
 }
 
 int server_init(int port) {
@@ -135,6 +142,8 @@ int server_init(int port) {
     }
     else
         printf("Server-socket() is OK\n");
+        
+        fcntl(socket_desc, F_SETFL, O_NONBLOCK);
 
     /* The setsockopt() function is used to allow */
     /* the local address to be reused when the server */
