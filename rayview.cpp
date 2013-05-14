@@ -110,6 +110,7 @@ static double FRICTION_ACCELERATION_MAGNITUDE = GROUND_FRICTION_COEFFICIENT * AC
 static double FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE = 12.0; 
 static double ANGLE_TURN_RATIO = 0.1;
 char time_str[50];
+char speed_str[50];
 char lap_str[50];
 int lap = 1;
 
@@ -770,11 +771,14 @@ void drawHUD(void)
     sprintf(time_str, "Time: %4.1f", curtime);
     prevtime = curtime;
 
+    double mph = abs(carSpeed) * 2.23694;
+    sprintf(speed_str, "Speed: %2.0f mph", mph);
+
     sprintf(lap_str, "Lap: %d of 3", lap);
 
     GLUTPrint(400,75, time_str);
     GLUTPrint(50,400,"Position: 2nd out of 10");
-    GLUTPrint(50,450,"Speed: 60mph");
+    GLUTPrint(50,450, speed_str);
     GLUTPrint(385,360,"Track");
     GLUTPrint(400,50, lap_str);
 
@@ -784,6 +788,47 @@ void drawHUD(void)
         glVertex2f(475, 475); // vertex 3
         glVertex2f(475, 380); // vertex 4
     glEnd();
+
+
+    GLfloat x;
+    GLfloat y; 
+    GLfloat s;
+    GLfloat t;
+   
+    const GLfloat delta_angle = 2.0*M_PI/360;
+   
+  //  glEnable(GL_TEXTURE_2D);
+  //  glBindTexture(GL_TEXTURE_2D, speedometerid);
+
+  //  glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+
+    glBegin(GL_TRIANGLE_FAN);   
+    glColor3d(0.5, 0.5, 0.5);
+
+    //draw the vertex at the center of the circle
+  //  texcoord[0] = 0.5;
+  //  texcoord[1] = 0.5;
+  //  glTexCoord2fv(texcoord);
+          
+    glVertex2f(75, 420);
+   
+    for(int i = 0; i < 361; i++)
+    {
+  //    texcoord[0] = (std::cos(delta_angle*i) + 1.0)*0.5;
+  //    texcoord[1] = (std::sin(delta_angle*i) + 1.0)*0.5;
+  //    glTexCoord2fv(texcoord);
+   
+      x = 75 + cos(delta_angle*i) * 75;
+      y = 420 + sin(delta_angle*i) * 75;
+      glVertex2f(x,y);
+    }
+   
+   // texcoord[0] = (1.0 + 1.0)*0.5;
+   // texcoord[1] = (0.0 + 1.0)*0.5;
+   // glTexCoord2fv(texcoord);
+    glEnd();
+   
+   // glDisable(GL_TEXTURE_2D);
     glEnable(GL_LIGHTING); 
 
     glMatrixMode(GL_PROJECTION);
