@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 /* BufferLength is 100 bytes */
 #define BufferLength 100
@@ -141,6 +142,8 @@ int server_init(int port) {
     }
     else
         printf("Server-socket() is OK\n");
+        
+        fcntl(socket_desc, F_SETFL, O_NONBLOCK);
 
     /* The setsockopt() function is used to allow */
     /* the local address to be reused when the server */

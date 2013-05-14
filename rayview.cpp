@@ -1280,6 +1280,15 @@ void GLUTRedrawMain(void)
       fprintf(stderr, "about to listen/send\n");
 
       if (is_client) {
+		  
+		  char* data_received = client_read(socket_desc);
+		 if (data_received != NULL) {
+			 fprintf(stderr, "Got data: %s\n", data_received);
+		 }
+		 else {
+			 fprintf(stderr, "No data... ;(\n");
+		 }
+		 
 		  char *my_string = "hello";
 		  //sprintf(my_string, "%3d,%3d,%3d", (int) playerCarXPos, (int) playerCarYPos, (int)playerCarZPos);
 		  if (client_write(my_string, socket_desc) == 0) {
@@ -1289,13 +1298,7 @@ void GLUTRedrawMain(void)
 			  fprintf(stderr, "Couldn't send to server!\n");
 		  }
 		  
-	     char* data_received = client_read(socket_desc);
-		 if (data_received != NULL) {
-			 fprintf(stderr, "Got data: %s\n", data_received);
-		 }
-		 else {
-			 fprintf(stderr, "No data... ;(\n");
-		 }
+	     
       }
       else {
         
