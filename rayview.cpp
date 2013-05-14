@@ -38,7 +38,7 @@ static char *input_scene_name = NULL;
 static R3Scene *scene = NULL;
 static R3Camera camera;
 static int show_faces = 1;
-static int show_bboxes = 0;
+static int show_bboxes = 1;
 static int show_lights = 0;
 static int show_camera = 0;
 static int save_image = 0;
@@ -1283,6 +1283,8 @@ void GLUTRedrawMain(void)
           sprintf(my_string, "%3d,%3d,%3d", (int) playerCarXPos, (int) playerCarYPos, (int)playerCarZPos);
           if (client_write(my_string, socket_desc) == 0) {
               fprintf(stderr, "Successful client send (probably)\n");
+              client_close(socket_desc);
+              server_close(socket_desc);
           }
           else {
               fprintf(stderr, "Couldn't send to server!\n");
@@ -1296,13 +1298,20 @@ void GLUTRedrawMain(void)
          }
       }
       else {
+          /*
          char* data_received = server_receive(socket_desc);
          if (data_received != NULL) {
-             fprintf(stderr, "Got data: %s\n", data_received);
+             fprintf(stderr, "Got data: [%s]\n", data_received);
+              client_close(socket_desc);
+              server_close(socket_desc);
          }
          else {
              fprintf(stderr, "No data... ;(\n");
          }
+*/
+        char* data = "stuff";
+        server_write(data, strlen(data));
+
       }
   }
 }    
