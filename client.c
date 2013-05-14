@@ -80,13 +80,15 @@ int client_init(char* server_addr, int port) {
     /* connection to the server. */
     /***********************************************/
     /* connect() to server. */
+    fprintf(stderr, "rc\n");     
     if((rc = connect(sd, (struct sockaddr *)&serveraddr, sizeof(serveraddr))) < 0) {
 		perror("Client-connect() error");
 		return -1;
     }
     else
     	printf("Connection established...\n");
-     
+
+    fprintf(stderr, "here\n");     
     return sd;
 }
 
