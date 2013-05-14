@@ -42,7 +42,7 @@ static int show_lights = 0;
 static int show_camera = 0;
 static int save_image = 0;
 static int quit = 0;
-static int show_rain = 0;
+static bool show_rain = false;
 
 // angle of rotation for the camera direction
 float angle = 0.0f;
@@ -1243,11 +1243,11 @@ void GLUTRedrawMain(void)
   // Load scene lights
   LoadLights(scene);
 	
-	// Draw particles
-	DrawParticles(scene);
-	
-	// Draw particle sources 
-	//DrawParticleSources(scene);
+  // Draw particles
+  DrawParticles(scene);
+
+  // Draw particle sources 
+  //DrawParticleSources(scene);
 
   LoadHeadLight();
 
@@ -1386,6 +1386,30 @@ void GLUTSpecial(int key, int x, int y)
   glutPostRedisplay();
 }
 
+void GLUTKeyboard(unsigned char key, int x, int y)
+{
+  // Invert y coordinate
+  y = GLUTwindow_height - y;
+
+  // Process keyboard button event 
+  switch (key) {
+	  case 'R':
+	  case 'r':
+		show_rain = !show_rain;
+		break;
+  }
+
+  // Remember mouse position 
+  GLUTmouse[0] = x;
+  GLUTmouse[1] = y;
+
+  // Remember modifiers 
+  GLUTmodifiers = glutGetModifiers();
+
+  // Redraw
+  glutPostRedisplay();
+}
+
 void GLUTSpecialUp(int key, int x, int y)
 {
   // Invert y coordinate
@@ -1393,24 +1417,24 @@ void GLUTSpecialUp(int key, int x, int y)
 
   // Process keyboard button event 
   switch (key) {
-  case GLUT_KEY_UP:
-    upPressActive = false;
-  break;
-  case GLUT_KEY_DOWN:
-    downPressActive = false;
-    break;
-  case GLUT_KEY_LEFT:
-    leftPressActive = false;
-    break;
-  case GLUT_KEY_RIGHT:
-    rightPressActive = false;
+	  case GLUT_KEY_UP:
+		upPressActive = false;
+		break;
+	  case GLUT_KEY_DOWN:
+		downPressActive = false;
+		break;
+	  case GLUT_KEY_LEFT:
+		leftPressActive = false;
+		break;
+	  case GLUT_KEY_RIGHT:
+		rightPressActive = false;
+		break;
+  }
 
-	break;
-  case 'R':
-  case 'r':
-	show_rain = !show_rain;
-    break;
-}
+  if (key == GLUT_KEY_RIGHT) {
+		fprintf(stderr, "stuff\n");
+		show_rain = !show_rain;
+  }
 
   // Remember mouse position 
   GLUTmouse[0] = x;
@@ -1446,6 +1470,7 @@ void GLUTInit(int *argc, char **argv)
   glutIdleFunc(GLUTIdle);
   glutReshapeFunc(GLUTResize);
   glutDisplayFunc(GLUTRedrawMain);
+  glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
   glutSpecialUpFunc(GLUTSpecialUp);
   glutMotionFunc(GLUTMotion);
