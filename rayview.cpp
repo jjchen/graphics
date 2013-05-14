@@ -20,8 +20,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <OpenAL/al.h>
-#include <OpenAL/alc.h>
+// #include <OpenAL/al.h>
+// #include <OpenAL/alc.h>
 
 void Update();
 void Collision(R3Scene *scene, R3Node *node);
@@ -40,7 +40,7 @@ static char *input_scene_name = NULL;
 static R3Scene *scene = NULL;
 static R3Camera camera;
 static int show_faces = 1;
-static int show_bboxes = 1;
+static int show_bboxes = 0;
 static int show_lights = 0;
 static int show_camera = 0;
 static int save_image = 0;
@@ -78,7 +78,7 @@ static int GLUTmodifiers = 0;
 // Player car
 static double playerCarXPos = 9.0;
 static double playerCarYPos = 0.0;
-static double playerCarZPos = 0.0;
+static double playerCarZPos = -5.0;
 
 // Other car
 static double otherCarXPos = 0.0;
@@ -111,7 +111,7 @@ static double camYPos = 50;
 static double camZDistance = camYPos;
 
 //gameplay physics variables
-static double carAngle = 60.0;
+static double carAngle = 90.0;
 static double carSpeed = 0.0;
 static double carAcceleration = 0.0;
 double MAX_SPEED = 60;
@@ -126,8 +126,8 @@ char lap_str[50];
 int lap = 1;
 
 
-ALuint rain_source;                                                          
-ALuint collision_source;
+//ALuint sound_source[2];   
+//ALuint sound_buffer[2];                                                            
 
 // GLUT command list
 
@@ -159,11 +159,15 @@ int endWithError(char* msg, int error=0)
 
 int LoadWav()
 {  
-    //Loading of the WAVE file
-    FILE *fp = NULL;                                                            //Create FILE pointer for the WAVE file
+ /*   //Loading of the WAVE file
+    FILE *fp = NULL;   
+    FiLE *fp2 = NULL                                                         //Create FILE pointer for the WAVE file
     fp=fopen("rain-04.wav","rb");                                            //Open the WAVE file
     if (!fp) return endWithError("Failed to open file");                        //Could not open file
     
+    fp2=fopen("inditch.wav","rb");                                            //Open the WAVE file
+    if (!fp2) return endWithError("Failed to open file");                        //Could not open file
+
     //Variables to store info about the WAVE file
     char type[4];
     DWORD size,chunkSize;
@@ -200,7 +204,7 @@ int LoadWav()
     return endWithError("Missing DATA");                                        //not data
     
     fread(&dataSize,sizeof(DWORD),1,fp);                                        //The size of the sound data is read
-    
+    */
     //Display the info about the WAVE file
     /*cout << "Chunk Size: " << chunkSize << "\n";
     cout << "Format Type: " << formatType << "\n";
@@ -211,7 +215,7 @@ int LoadWav()
     cout << "Bits Per Sample: " << bitsPerSample << "\n";
     cout << "Data Size: " << dataSize << "\n";*/
         
-    unsigned char* buf= new unsigned char[dataSize];                            //Allocate memory for the sound data
+/*    unsigned char* buf= new unsigned char[dataSize];                            //Allocate memory for the sound data
     //cout << fread(buf,sizeof(BYTE),dataSize,fp) << " bytes loaded\n";           //Read the sound data and display the 
                                                                                 //number of bytes loaded.
                                                                                 //Should be the same as the Data Size if OK
@@ -227,12 +231,11 @@ int LoadWav()
     alcMakeContextCurrent(context);                                             //Make the context the current
     if(!context) return endWithError("no sound context");                       //Error during context handeling
 
-    ALuint buffer;                                                              //Stores the sound data
     ALuint frequency=sampleRate;;                                               //The Sample Rate of the WAVE file
     ALenum format=0;                                                            //The audio format (bits per sample, number of channels)
     
-    alGenBuffers(1, &buffer);                                                    //Generate one OpenAL Buffer and link to "buffer"
-    alGenSources(1, &rain_source);                                                   //Generate one OpenAL Source and link to "source"
+    alGenBuffers(2, sound_buffer);                                                    //Generate one OpenAL Buffer and link to "buffer"
+    alGenSources(2, sound_source);                                                   //Generate one OpenAL Source and link to "source"
     if(alGetError() != AL_NO_ERROR) return endWithError("Error GenSource");     //Error during buffer/source generation
     
     //Figure out the format of the WAVE file
@@ -252,7 +255,9 @@ int LoadWav()
     }
     if(!format) return endWithError("Wrong BitPerSample");                      //Not valid format
 
-    alBufferData(buffer, format, buf, dataSize, frequency);                    //Store the sound data in the OpenAL Buffer
+
+
+    alBufferData(sound_buffer[0], format, buf, dataSize, frequency);                    //Store the sound data in the OpenAL Buffer
     if(alGetError() != AL_NO_ERROR) 
     return endWithError("Error loading ALBuffer");                              //Error during buffer loading
   
@@ -269,14 +274,15 @@ int LoadWav()
     alListenerfv(AL_ORIENTATION, ListenerOri);                                  //Set orientation of the listener
     
     //Source
-    alSourcei (rain_source, AL_BUFFER,   buffer);                                    //Link the buffer to the source
-    alSourcef (rain_source, AL_PITCH,    1.0f     );                                 //Set the pitch of the source
-    alSourcef (rain_source, AL_GAIN,     1.0f     );                                 //Set the gain of the source
-    alSourcefv(rain_source, AL_POSITION, SourcePos);                                 //Set the position of the source
-    alSourcefv(rain_source, AL_VELOCITY, SourceVel);                                 //Set the velocity of the source
-    alSourcei (rain_source, AL_LOOPING,  AL_TRUE );                                  //Set if source is looping sound
+    alSourcei (sound_source[0], AL_BUFFER,   sound_buffer[0]);                                    //Link the buffer to the source
+    alSourcef (sound_source[0], AL_PITCH,    1.0f     );                                 //Set the pitch of the source
+    alSourcef (sound_source[0], AL_GAIN,     1.0f     );                                 //Set the gain of the source
+    alSourcefv(sound_source[0], AL_POSITION, SourcePos);                                 //Set the position of the source
+    alSourcefv(sound_source[0], AL_VELOCITY, SourceVel);                                 //Set the velocity of the source
+    alSourcei (sound_source[0], AL_LOOPING,  AL_TRUE );                                  //Set if source is looping sound
     
-    //system("PAUSE");                                                            //Pause to let the sound play                                                      
+    //system("PAUSE");                                                            //Pause to let the sound play   
+    */                                                   
 }
 
 
@@ -523,6 +529,7 @@ void Update()
   {
     carAcceleration = (carSpeed >= 0.0) ? -1.0 * FRICTION_ACCELERATION_MAGNITUDE : FRICTION_ACCELERATION_MAGNITUDE;
   }
+
   Collision(scene, scene->root);
 
   if (collision == 0) {
@@ -850,7 +857,6 @@ bool myfn(double i, double j)
 
 void Collision(R3Scene *scene, R3Node *node)
 {
-  collision = 0;
   if (node->children.size() == 0 && node->isPlayerCarMesh == 0 && node->isTrack == 0)
   {
     double car_minx = scene->player->bbox.XMin();
@@ -889,7 +895,7 @@ void Collision(R3Scene *scene, R3Node *node)
     
     if (intersect == 1)
     {
-            collision = 1;
+      collision = 1;
       // process collisions
       //update car position
       playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.2; //may need to change to -=
@@ -1015,7 +1021,7 @@ void GenerateParticles(R3Scene *scene, double current_time, double delta_time)
 			//double py = scene->ParticleSource(i)->shape->sphere->Center().Y() + d*sin(phi);
 			//double pz = scene->ParticleSource(i)->shape->sphere->Center().Z() + z;
 			double px = scene->player->bbox.Centroid().X() + d*cos(phi);
-			double py = (scene->player->bbox.Centroid().Y() + 150) + d*sin(phi);
+			double py = (scene->player->bbox.Centroid().Y() + 10) + d*sin(phi);
 			double pz = scene->player->bbox.Centroid().Z() + z;
 			particle->position = R3Point(px,py,pz);
 			particle->material = scene->ParticleSource(i)->material;
@@ -1371,7 +1377,9 @@ void LoadHeadLight(void) {
 
 void GLUTRedrawMain(void)
 {
+  Collision(scene, scene->root);
   Update();
+  collision = 0;
 
   glutSetWindow(GLUTwindow);
   glEnable(GL_SCISSOR_TEST);
@@ -1565,13 +1573,13 @@ void GLUTKeyboard(unsigned char key, int x, int y)
 	  case 'R':
 	  case 'r':
 		show_rain = !show_rain;
-    int sourceAudioState = 0;
-    alGetSourcei(rain_source, AL_SOURCE_STATE, &sourceAudioState);
-    if(sourceAudioState != AL_PLAYING)
-      alSourcePlay(rain_source); 
-    else 
-      alSourceStop(rain_source);                                                     
-		break;
+   // int sourceAudioState = 0;
+   // alGetSourcei(sound_source[0], AL_SOURCE_STATE, &sourceAudioState);
+   // if(sourceAudioState != AL_PLAYING)
+   //   alSourcePlay(sound_source[0]); 
+   // else 
+   //   alSourceStop(sound_source[0]);                                                     
+	//	break;
   }
 
   // Remember mouse position 
