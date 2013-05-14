@@ -17,6 +17,18 @@
 #pragma warning(disable:4996)
 #define M_PI 3.1415925
 #endif
+#ifdef __APPLE__
+# include <OpenGL/gl.h>
+# include <OpenGL/glu.h>
+#else 
+# ifdef _WIN32
+#   include <GL/gl.h>
+#   include <GL/glu.h>
+# else
+#   include <GL/gl.h>
+#   include <GL/glu.h>
+# endif
+#endif
 
 
 
@@ -36,6 +48,7 @@ class R3Line;
 class R3Ray;
 class R3Segment;
 class R3Plane;
+class R3Circle;
 class R3Box;
 class R3Cylinder;
 class R3Cone;
@@ -52,6 +65,7 @@ class R3Matrix;
 #include "R3Ray.h"
 #include "R3Segment.h"
 #include "R3Plane.h"
+#include "R3Circle.h"
 #include "R3Box.h"
 #include "R3Cylinder.h"
 #include "R3Cone.h"

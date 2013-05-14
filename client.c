@@ -31,7 +31,7 @@ int totalcnt = 0;
 /* Pass in 1 parameter which is either the */
 /* address or host name of the server, or */
 /* set the server name in the #define SERVER ... */
-int init_client(char* server_addr, int port) {
+int client_init(char* server_addr, int port) {
     /* Variable and structure definitions. */
     int sd;
     struct sockaddr_in serveraddr;
@@ -90,7 +90,7 @@ int init_client(char* server_addr, int port) {
     return sd;
 }
 
-int write(char* data, int sd) {
+int client_write(char* data, int sd) {
     /* Send string to the server using */
     /* the write() function. */
     /*********************************************/
@@ -106,16 +106,21 @@ int write(char* data, int sd) {
 			perror("SO_ERROR was");
 		}
 
-		close(sd);
-		exit(-1);
+		//close(sd);
+		//exit(-1);
+        return -1;
     }
     else {
 		printf("Client-write() is OK\n");
 		printf("String successfully sent lol!\n");
     }
 
+    return 0;
+}
+
+char *client_read(int sd) {
     totalcnt = 0;
-    while(totalcnt < BufferLength) {
+    while (totalcnt < BufferLength) {
 		/* Wait for the server to echo the */
 		/* string by using the read() function. */
 		/***************************************/
@@ -123,13 +128,15 @@ int write(char* data, int sd) {
 		rc = read(sd, &buffer[totalcnt], BufferLength-totalcnt);
 		if(rc < 0) {
 			perror("Client-read() error");
-			close(sd);
-			exit(-1);
+			//close(sd);
+			//exit(-1);
+            return NULL;
 		}
 		else if (rc == 0) {
 			printf("Server program has issued a close()\n");
-			close(sd);
-			exit(-1);
+			//close(sd);
+			//exit(-1);
+            return NULL;
 		}
 		else
 			totalcnt += rc;
@@ -137,14 +144,15 @@ int write(char* data, int sd) {
 
     printf("Client-read() is OK\n");
     printf("Echoed data from the f***ing server: %s\n", buffer);
+    return buffer;
+}
 
+void client_close(int sd) {
     /* When the data has been read, close() */
     /* the socket descriptor. */
     /****************************************/
     /* Close socket descriptor from client side. */
-    //close(sd);
+    close(sd);
     //exit(0);
-    return 0;
+    //return 0;
 }
-
-// NEED TO CLOSE SD AT SOME POINT

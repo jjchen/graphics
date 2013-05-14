@@ -35,6 +35,186 @@ R3Scene(void)
 
 
 
+static R3Shape *
+ReadShape(FILE *fp, int command_number, const char *filename)
+{
+  // Initialize result
+  R3Shape *shape = NULL;
+
+  // Read shape type
+  char shape_type[1024];
+  if (fscanf(fp, "%s", shape_type) != 1) {
+    fprintf(stderr, "Unable to read shape type at command %d in file %s\n", command_number, filename);
+    return NULL;
+  }      
+
+  // Read shape args
+  if (!strcmp(shape_type, "box")) {
+    // Read sphere args
+    double x1, y1, z1, x2, y2, z2;
+    if (fscanf(fp, "%lf%lf%lf%lf%lf%lf", &x1, &y1, &z1, &x2, &y2, &z2) != 6) {
+      fprintf(stderr, "Unable to read sphere args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_BOX_SHAPE;
+    shape->box = new R3Box(x1, y1, z1, x2, y2, z2);
+    shape->sphere = NULL;
+    shape->cylinder = NULL;
+    shape->cone = NULL;
+    shape->mesh = NULL;
+    shape->segment = NULL;
+    shape->circle = NULL;
+  }
+  else if (!strcmp(shape_type, "sphere")) {
+    // Read sphere args
+    double center_x, center_y, center_z, radius;
+    if (fscanf(fp, "%lf%lf%lf%lf", &center_x, &center_y, &center_z, &radius) != 4) {
+      fprintf(stderr, "Unable to read sphere args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_SPHERE_SHAPE;
+    shape->box = NULL;
+    shape->sphere = new R3Sphere(R3Point(center_x, center_y, center_z), radius);
+    shape->cylinder = NULL;
+    shape->cone = NULL;
+    shape->mesh = NULL;
+    shape->segment = NULL;
+    shape->circle = NULL;
+  }
+  else if (!strcmp(shape_type, "cylinder")) {
+    // Read cylinder args
+    double center_x, center_y, center_z, radius, height;
+    if (fscanf(fp, "%lf%lf%lf%lf%lf", &center_x, &center_y, &center_z, &radius, &height) != 5) {
+      fprintf(stderr, "Unable to read cylinder args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_CYLINDER_SHAPE;
+    shape->box = NULL;
+    shape->sphere = NULL;
+    shape->cylinder = new R3Cylinder(R3Point(center_x, center_y, center_z), radius, height);
+    shape->cone = NULL;
+    shape->mesh = NULL;
+    shape->segment = NULL;
+    shape->circle = NULL;
+  }
+  else if (!strcmp(shape_type, "cone")) {
+    // Read cylinder args
+    double center_x, center_y, center_z, radius, height;
+    if (fscanf(fp, "%lf%lf%lf%lf%lf", &center_x, &center_y, &center_z, &radius, &height) != 5) {
+      fprintf(stderr, "Unable to read cone args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_CONE_SHAPE;
+    shape->box = NULL;
+    shape->sphere = NULL;
+    shape->cylinder = NULL;
+    shape->cone = new R3Cone(R3Point(center_x, center_y, center_z), radius, height);
+    shape->mesh = NULL;
+    shape->segment = NULL;
+    shape->circle = NULL;
+  }
+  else if (!strcmp(shape_type, "mesh")) {
+    // Read mesh args
+    char meshname[1024];
+    if (fscanf(fp, "%s", meshname) != 1) {
+      fprintf(stderr, "Unable to read mesh args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Get mesh filename
+    char buffer[2048];
+    strcpy(buffer, filename);
+    char *bufferp = strrchr(buffer, '/');
+    if (bufferp) *(bufferp+1) = '\0';
+    else buffer[0] = '\0';
+    strcat(buffer, meshname);
+    
+    // Create mesh
+    R3Mesh *mesh = new R3Mesh();
+    if (!mesh) {
+      fprintf(stderr, "Unable to allocate mesh\n");
+      return 0;
+    }
+    
+    // Read mesh file
+    if (!mesh->Read(buffer)) {
+      fprintf(stderr, "Unable to read mesh: %s\n", buffer);
+      return 0;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_MESH_SHAPE;
+    shape->box = NULL;
+    shape->sphere = NULL;
+    shape->cylinder = NULL;
+    shape->cone = NULL;
+    shape->mesh = mesh;
+    shape->segment = NULL;
+    shape->circle = NULL;
+  }
+  else if (!strcmp(shape_type, "line")) {
+    // Read sphere args
+    double x1, y1, z1, x2, y2, z2;
+    if (fscanf(fp, "%lf%lf%lf%lf%lf%lf", &x1, &y1, &z1, &x2, &y2, &z2) != 6) {
+      fprintf(stderr, "Unable to read sphere args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_SEGMENT_SHAPE;
+    shape->box = NULL;
+    shape->sphere = NULL;
+    shape->cylinder = NULL;
+    shape->cone = NULL;
+    shape->mesh = NULL;
+    shape->segment = new R3Segment(R3Point(x1, y1, z1), R3Point(x2, y2, z2));
+    shape->circle = NULL;
+  }
+  else if (!strcmp(shape_type, "circle")) {
+    // Read circle args
+    double center_x, center_y, center_z, normal_x, normal_y, normal_z, radius;
+    if (fscanf(fp, "%lf%lf%lf%lf%lf%lf%lf", &center_x, &center_y, &center_z, &normal_x, &normal_y, &normal_z, &radius) != 7) {
+      fprintf(stderr, "Unable to read circle args at command %d in file %s\n", command_number, filename);
+      return NULL;
+    }
+
+    // Create shape
+    shape = new R3Shape();
+    shape->type = R3_CIRCLE_SHAPE;
+    shape->box = NULL;
+    shape->sphere = NULL;
+    shape->cylinder = NULL;
+    shape->cone = NULL;
+    shape->mesh = NULL;
+    shape->segment = NULL;
+    shape->circle = new R3Circle(R3Point(center_x, center_y, center_z), radius, R3Vector(normal_x, normal_y, normal_z));
+  }
+  else {
+    // Unrecognized shape type
+    fprintf(stderr, "Invalid shape type (%s) at command %d in file %s\n", shape_type, command_number, filename);
+    return NULL;
+  }
+
+  // Return created shape
+  return shape;
+}
+
+
+
 int R3Scene::
 Read(const char *filename, R3Node *node)
 {
@@ -71,10 +251,181 @@ Read(const char *filename, R3Node *node)
   // Read body
   char cmd[128];
   int command_number = 1;
+  vector<R3Particle *> particles_for_springs;
   while (fscanf(fp, "%s", cmd) == 1) {
     if (cmd[0] == '#') {
       // Comment -- read everything until end of line
       do { cmd[0] = fgetc(fp); } while ((cmd[0] >= 0) && (cmd[0] != '\n'));
+    }
+	else if (!strcmp(cmd, "particle")) {
+      // Read position and velocity
+      R3Point position;
+      R3Vector velocity;
+      double mass, drag, elasticity, lifetime;
+      int fixed, m;
+      if (fscanf(fp, "%lf%lf%lf%lf%lf%lf%lf%d%lf%lf%lf%d", 
+        &position[0], &position[1], &position[2], 
+        &velocity[0], &velocity[1], &velocity[2], 
+        &mass, &fixed, &drag, &elasticity, &lifetime, &m) != 12) {
+        fprintf(stderr, "Unable to read particle at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
+
+      // Get material
+      R3Material *material = group_materials[depth];
+      if (m >= 0) {
+        if (m < (int) materials.size()) {
+          material = materials[m];
+        }
+        else {
+          fprintf(stderr, "Invalid material id at particle command %d in file %s\n", command_number, filename);
+          return 0;
+        }
+      }
+
+      // Create particle
+      R3Particle *particle = new R3Particle();
+      particle->position = position;
+      particle->velocity = velocity;
+      particle->mass = mass;
+      particle->fixed = (fixed) ? true : false;
+      particle->drag = drag;
+      particle->elasticity = elasticity;
+      particle->lifetime = lifetime;
+      particle->material = material;   
+
+      // Add particle to scene
+      particles.push_back(particle);
+
+      // Update scene bounding box
+      bbox.Union(position);
+
+      // Add to list of particles available for springs
+      particles_for_springs.push_back(particle);
+    }
+    else if (!strcmp(cmd, "particle_source")) {
+      // Read particle source parameters 
+      double mass, drag, elasticity, lifetime;
+      double rate, velocity, angle_cutoff;
+      int fixed, m;
+      if (fscanf(fp, "%lf%d%lf%lf%lf%d%lf%lf%lf", &mass, &fixed, &drag, &elasticity, &lifetime, &m, &rate, &velocity, &angle_cutoff) != 9) {
+        fprintf(stderr, "Unable to read particle source at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
+
+      // Read shape
+      R3Shape *shape = ReadShape(fp, command_number, filename);
+      if (!shape) {
+        fprintf(stderr, "Unable to read particle source at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
+
+      // Get material
+      R3Material *material = group_materials[depth];
+      if (m >= 0) {
+        if (m < (int) materials.size()) {
+          material = materials[m];
+        }
+        else {
+          fprintf(stderr, "Invalid material id at particle source command %d in file %s\n", command_number, filename);
+          return 0;
+        }
+      }
+
+      // Create particle source
+      R3ParticleSource *source = new R3ParticleSource();
+      source->mass = mass;
+      source->fixed = (fixed) ? true : false;
+      source->drag = drag;
+      source->elasticity = elasticity;
+      source->lifetime = lifetime;
+      source->material = material;   
+      source->rate = rate;
+      source->velocity = velocity;
+      source->angle_cutoff = angle_cutoff;
+      source->shape = shape;   
+
+      // Add particle source to scene
+      particle_sources.push_back(source);
+
+      // Update scene bounding box
+      if (shape->type == R3_SEGMENT_SHAPE) bbox.Union(shape->segment->BBox());
+      else if (shape->type == R3_BOX_SHAPE) bbox.Union(*(shape->box));
+      else if (shape->type == R3_CIRCLE_SHAPE) bbox.Union(shape->circle->BBox());
+      else if (shape->type == R3_SPHERE_SHAPE) bbox.Union(shape->sphere->BBox());
+      else if (shape->type == R3_CYLINDER_SHAPE) bbox.Union(shape->cylinder->BBox());
+      else if (shape->type == R3_CONE_SHAPE) bbox.Union(shape->cone->BBox());
+      else if (shape->type == R3_MESH_SHAPE) bbox.Union(shape->mesh->bbox);
+    }
+    else if (!strcmp(cmd, "particle_sink")) {
+      // Read sink parameters 
+      double intensity, ca, la, qa;
+      if (fscanf(fp, "%lf%lf%lf%lf", &intensity, &ca, &la, &qa) != 4) {
+        fprintf(stderr, "Unable to read particle sink at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
+
+      // Read shape
+      R3Shape *shape = ReadShape(fp, command_number, filename);
+      if (!shape) {
+        fprintf(stderr, "Unable to read particle source at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
+
+      // Create particle sink
+      R3ParticleSink *sink = new R3ParticleSink();
+      sink->intensity = intensity;
+      sink->constant_attenuation = ca;
+      sink->linear_attenuation = la;
+      sink->quadratic_attenuation = qa;
+      sink->shape = shape;
+
+      // Add particle sink to scene
+      particle_sinks.push_back(sink);
+
+      // Update scene bounding box
+      if (shape->type == R3_SEGMENT_SHAPE) bbox.Union(shape->segment->BBox());
+      else if (shape->type == R3_BOX_SHAPE) bbox.Union(*(shape->box));
+      else if (shape->type == R3_CIRCLE_SHAPE) bbox.Union(shape->circle->BBox());
+      else if (shape->type == R3_SPHERE_SHAPE) bbox.Union(shape->sphere->BBox());
+      else if (shape->type == R3_CYLINDER_SHAPE) bbox.Union(shape->cylinder->BBox());
+      else if (shape->type == R3_CONE_SHAPE) bbox.Union(shape->cone->BBox());
+      else if (shape->type == R3_MESH_SHAPE) bbox.Union(shape->mesh->bbox);
+    }
+    else if (!strcmp(cmd, "particle_spring")) {
+      // Read gravity parameters 
+      int id1, id2;
+      double rest_length, ks, kd;
+      if (fscanf(fp, "%d%d%lf%lf%lf", &id1, &id2, &rest_length, &ks, &kd) != 5) {
+        fprintf(stderr, "Unable to read particle spring at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
+
+      // Get particles
+      R3Particle *particle1 = particles_for_springs[id1];
+      R3Particle *particle2 = particles_for_springs[id2];
+
+      // Create particle spring
+      R3ParticleSpring *spring = new R3ParticleSpring();
+      spring->particles[0] = particle1;
+      spring->particles[1] = particle2;
+      spring->rest_length = rest_length;
+      spring->ks = ks;
+      spring->kd = kd;
+
+      // Insert spring into particles
+      particle1->springs.push_back(spring);
+      particle2->springs.push_back(spring);
+
+      // Insert spring into scene
+      particle_springs.push_back(spring);
+    }
+    else if (!strcmp(cmd, "particle_gravity")) {
+      // Read gravity parameters 
+      if (fscanf(fp, "%lf%lf%lf", &gravity[0], &gravity[1], &gravity[2]) != 3) {
+        fprintf(stderr, "Unable to read particle gravity at command %d in file %s\n", command_number, filename);
+        return 0;
+      }
     }
     else if (!strcmp(cmd, "tri")) {
       // Read data
@@ -152,6 +503,13 @@ Read(const char *filename, R3Node *node)
         }
       }
 
+	
+		bool isTrack = false;
+		if (m == 1)
+		{
+			isTrack = true;
+		}
+		
       // Create box
       R3Box *box = new R3Box(p1, p2);
 
@@ -171,6 +529,7 @@ Read(const char *filename, R3Node *node)
       node->material = material;
       node->shape = shape;
       node->bbox = *box;
+		node->isTrack = isTrack;
 
       // Insert node
       group_nodes[depth]->bbox.Union(node->bbox);
@@ -287,7 +646,7 @@ Read(const char *filename, R3Node *node)
       bool isPlayerCarMesh = false;
       if (n == 1)
       {
-		isPlayerCarMesh = true;  
+		isPlayerCarMesh = true;
 	  }
       
 
@@ -342,6 +701,12 @@ Read(const char *filename, R3Node *node)
       node->bbox = mesh->bbox;
 	  node->isPlayerCarMesh = isPlayerCarMesh;
 	  
+	  if (isPlayerCarMesh == true)
+	  {
+		  player = mesh;
+	  }
+	  originalbbox = mesh->bbox;
+		
       // Insert node
       group_nodes[depth]->bbox.Union(node->bbox);
       group_nodes[depth]->children.push_back(node);

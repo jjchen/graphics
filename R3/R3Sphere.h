@@ -1,6 +1,6 @@
 // Include file for the R3 sphere class 
 
-#include "cos426_opengl.h"
+
 
 // Class definition 
 

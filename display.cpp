@@ -66,6 +66,8 @@ double height;
 char time_str[50];
 char lap_str[50];
 int lap = 1;
+int mainWindow = 0;
+int subWindow = 0;
 
 void init(void) 
 {
@@ -80,12 +82,12 @@ void init(void)
    glLightfv(GL_LIGHT0, GL_POSITION, light_position);
 
 
-GLfloat light1_diffuse[] = { 1.0, 1.0, 1.0, 1.0 };
-GLfloat light1_specular[] = { 1.0, 1.0, 1.0, 1.0 };
+  GLfloat light1_diffuse[] = { 1.0, 1.0, 1.0, 1.0 };
+  GLfloat light1_specular[] = { 1.0, 1.0, 1.0, 1.0 };
 
-glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_diffuse);
-glLightfv(GL_LIGHT1, GL_SPECULAR, light1_specular);
-glLightfv(GL_LIGHT1, GL_POSITION, light_position);
+  glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_diffuse);
+  glLightfv(GL_LIGHT1, GL_SPECULAR, light1_specular);
+  glLightfv(GL_LIGHT1, GL_POSITION, light_position);
 
    glEnable(GL_LIGHTING);
    glEnable(GL_LIGHT0);
@@ -105,7 +107,7 @@ void GLUTPrint(double x, double y, char * text)
   #endif  
 }
 
-void drawText(void)
+void drawHUD(void)
 {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -113,10 +115,11 @@ void drawText(void)
     glOrtho(0.0, 500, 500, 0.0, -1.0, 10.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    glDisable(GL_LIGHTING); 
 
     glClear(GL_DEPTH_BUFFER_BIT);
-    glColor3d(1.0f, 0.0f, 0.0f);
-
+    glColor3d(1.0f, 1.0f, 1.0f);
+    
     double curtime = GetTime();
     static double prevtime = 0;
     if (prevtime == 0) prevtime = curtime;
@@ -127,26 +130,26 @@ void drawText(void)
 
     sprintf(lap_str, "Lap: %d of 3", lap);
 
-    GLUTPrint(200,50, time_str);
+    GLUTPrint(400,75, time_str);
     GLUTPrint(50,400,"Position: 2nd out of 10");
     GLUTPrint(50,450,"Speed: 60mph");
     GLUTPrint(385,360,"Track");
     GLUTPrint(400,50, lap_str);
 
     glBegin(GL_QUADS);
-        glColor3d(1.0f, 0.0f, 0.0f);
         glVertex2f(380, 380); // vertex 1
         glVertex2f(380, 475); // vertex 2
         glVertex2f(475, 475); // vertex 3
         glVertex2f(475, 380); // vertex 4
     glEnd();
+    glEnable(GL_LIGHTING); 
 
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  
 }
 
-void drawText(char* text)
+void drawEnd(char* text)
 {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -155,6 +158,10 @@ void drawText(char* text)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
+    glDisable(GL_LIGHTING); 
+    glColor3f(0.0f, 0.0f, 1.0f);
+    GLUTPrint(220, 375, "Replay");
+    glColor3f(1.0f, 1.0f, 1.0f);
 
     GLUTPrint(225, 225, text);
     glBegin(GL_QUADS);
@@ -163,9 +170,9 @@ void drawText(char* text)
         glVertex2f(300, 400); // vertex 3
         glVertex2f(300, 350); // vertex 4
     glEnd();
-    glColor3f(1.0f,0.5f,0.5f);
 
-    GLUTPrint(200, 350, "HII");
+    glEnable(GL_LIGHTING); 
+    
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  
@@ -174,33 +181,39 @@ void drawText(char* text)
 
 
 void displayEnd(void){
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   glViewport(0, 0, width, height);
+   gluPerspective(45, (width)/height, 1, 2000);
+   glMatrixMode(GL_MODELVIEW);
+
    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
    glPushMatrix ();
    glTranslatef (0.0, 0.0, -5.0);
-   drawText("END!");
+   drawEnd("END!");
    glPopMatrix ();
    glFlush ();
 }
 
-void display(void)
-{
-   if (lap == 3) {
-    displayEnd();
+void displaySubwindow(void) {
+   glutSetWindow(subWindow);
+ 
+  if (lap == 3) {
     return;
-   }
+  }
 
    GLfloat position[] = { 0.0, 0.0, 1.5, 1.0 };
 
    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-
+   glEnable(GL_LIGHTING);
    glPushMatrix ();
    glTranslatef (0.0, 0.0, -5.0);
 
    glPushMatrix ();
    glRotated ((GLdouble) spin, 1.0, 0.0, 0.0);
-   glLightfv (GL_LIGHT1, GL_POSITION, position);
+   glLightfv (GL_LIGHT0, GL_POSITION, position);
 
    glTranslated (0.0, 0.0, 1.5);
    glDisable (GL_LIGHTING);
@@ -211,11 +224,85 @@ void display(void)
 
    glutSolidTorus (0.275, 0.85, 8, 15);
 
-   drawText();
+   glPopMatrix ();
+
+   glFlush ();  
+   glutPostRedisplay();
+}
+
+void display(void)
+{
+   if (lap == 3) {
+    displayEnd();
+    return;
+   }
+   GLfloat position[] = { 0.0, 0.0, 1.5, 1.0 };
+
+   glEnable(GL_SCISSOR_TEST);
+   glEnable(GL_DEPTH_TEST);
+   GLfloat color[4] = {1.0, 0.0, 0.0, 1.0};
+
+   // main view port
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   glViewport(0, 0, width, height);
+   gluPerspective(45, (width)/height, 1, 2000);
+   glMatrixMode(GL_MODELVIEW);
+   glScissor(0, 0, width , height);
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   glLoadIdentity();
+   gluLookAt( 0.0, 0.0, 50.0,
+              0.0, 0.0, 0.0,
+              0.0, 1.0, 0.0 );
+
+   glPushMatrix ();
+   glRotated ((GLdouble) spin, 1.0, 0.0, 0.0);
+   glLightfv (GL_LIGHT0, GL_POSITION, position);
+
+   glTranslated (0.0, 0.0, 1.5);
+   glDisable (GL_LIGHTING);
+   glColor3f (0.0, 1.0, 1.0);
+   glutWireCube (0.1);
+   glEnable (GL_LIGHTING);
+   glPopMatrix ();
+
+   glutSolidTorus (0.275, 0.85, 8, 15);
+   drawHUD();
 
    glPopMatrix ();
 
-   glFlush ();
+
+   /*
+    * THE SECOND VIEW PORT
+    */
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   glViewport(2*width/3, 0, width/3 , height/2);
+   gluPerspective(45, (width)/2/(height), 1, 2000);
+   glMatrixMode(GL_MODELVIEW);
+   glScissor((2*width/3), 0, width/3 , height/2);
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   glLoadIdentity();
+   gluLookAt( 0.0, 0.0, 50.0,
+              0.0, 0.0, 0.0,
+              0.0, 1.0, 0.0 );
+
+   glPushMatrix ();
+   glRotated ((GLdouble) spin, 1.0, 0.0, 0.0);
+   glLightfv (GL_LIGHT0, GL_POSITION, position);
+
+   glTranslated (0.0, 0.0, 1.5);
+   glDisable (GL_LIGHTING);
+   glColor3f (0.0, 1.0, 1.0);
+   glutWireCube (0.1);
+   glEnable (GL_LIGHTING);
+   glPopMatrix ();
+
+   glutSolidTorus (0.275, 0.85, 8, 15);
+
+   glDisable(GL_SCISSOR_TEST);
+   glFlush();
+   glutSwapBuffers();
    glutPostRedisplay();
 
 }
@@ -260,11 +347,13 @@ int main(int argc, char** argv)
    glutInitDisplayMode (GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
    glutInitWindowSize (500, 500); 
    glutInitWindowPosition (100, 100);
-   glutCreateWindow (argv[0]);
+   mainWindow = glutCreateWindow (argv[0]);
    init ();
    glutDisplayFunc(display); 
    glutReshapeFunc(reshape);
    glutMouseFunc(mouse);
+   glutSetWindow(mainWindow);
+
    glutMainLoop();
    return 0;
 }

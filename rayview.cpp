@@ -15,8 +15,14 @@
 #include <iostream>
 #include "client.h"
 #include "server.h"
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 void Update();
+void Collision(R3Scene *scene, R3Node *node);
 double toRads(double degrees);
 
 ////////////////////////////////////////////////////////////
@@ -37,6 +43,7 @@ static int show_lights = 0;
 static int show_camera = 0;
 static int save_image = 0;
 static int quit = 0;
+static bool show_rain = false;
 
 // angle of rotation for the camera direction
 float angle = 0.0f;
@@ -52,6 +59,8 @@ float x=0.0f, z=5.0f, y = 1.75f;
 float deltaAngle = 0.0f;
 float deltaMove = 0;
 int xOrigin = -1;
+
+static int collision;
 
 // GLUT variables 
 
@@ -91,8 +100,8 @@ static bool use_networking = false;
 static int socket_desc;
 
 enum {
-	THIRD_PERSON_VIEW,
-	DRIVER_SEAT_VIEW
+  THIRD_PERSON_VIEW,
+  DRIVER_SEAT_VIEW
 };
 
 static int currentView = THIRD_PERSON_VIEW;
@@ -109,7 +118,10 @@ static double GROUND_FRICTION_COEFFICIENT = 0.7;
 static double FRICTION_ACCELERATION_MAGNITUDE = GROUND_FRICTION_COEFFICIENT * ACCELERATION_DUE_TO_GRAVITY;
 static double FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE = 12.0; 
 static double ANGLE_TURN_RATIO = 0.1;
-
+char time_str[50];
+char speed_str[50];
+char lap_str[50];
+int lap = 1;
 
 // GLUT command list
 
@@ -122,6 +134,14 @@ enum {
   SAVE_IMAGE_COMMAND,
   QUIT_COMMAND,
 };
+
+using namespace std;
+
+/////////////////////////////////////////////////////////////
+//Sound
+/////////////////////////////////////////////////////////////
+
+
 
 /////////////////////////////////////////////////////////////
 // Miscellaneous Functions
@@ -188,6 +208,7 @@ void DrawShape(R3Shape *shape)
   else if (shape->type == R3_CONE_SHAPE) shape->cone->Draw();
   else if (shape->type == R3_MESH_SHAPE) shape->mesh->Draw();
   else if (shape->type == R3_SEGMENT_SHAPE) shape->segment->Draw();
+  else if (shape->type == R3_CIRCLE_SHAPE) shape->circle->Draw();
   else fprintf(stderr, "Unrecognized shape type: %d\n", shape->type);
 }
 
@@ -299,7 +320,7 @@ void LoadMaterial(R3Material *material)
 
 double toRads(double degrees)
 {
-	return (3.14159 / 180.0) * degrees;
+  return (3.14159 / 180.0) * degrees;
 }
 //updates objects in world, such as car
 //called at beginning of rendering cycle -- change elseifs to ifs when
@@ -328,20 +349,20 @@ void Update()
   //set the velocity to 0 (friction can't make you change directions by taking you "past" 0)
   if (abs(carAcceleration) == FRICTION_ACCELERATION_MAGNITUDE)
   {
-	  bool previousSpeedPositive = (carSpeed >= 0);
-	  bool newSpeedPositive = (newSpeed) >= 0;
-	  if (previousSpeedPositive != newSpeedPositive)
-	  {
-		  carSpeed = 0.0;
-	  }
-	  else
-	  {
-		  carSpeed = newSpeed;
-	  }
+    bool previousSpeedPositive = (carSpeed >= 0);
+    bool newSpeedPositive = (newSpeed) >= 0;
+    if (previousSpeedPositive != newSpeedPositive)
+    {
+      carSpeed = 0.0;
+    }
+    else
+    {
+      carSpeed = newSpeed;
+    }
   }
   else
   {
-	  carSpeed = newSpeed;
+    carSpeed = newSpeed;
   }
   
   //clamp car speed
@@ -351,28 +372,31 @@ void Update()
   //update car acceleration (and reset speed to 0 if press up/down to change directions)
   if (upPressActive)
   {
-	  carAcceleration = FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE;
-	  if (carSpeed < 0) carSpeed = 0;
+    carAcceleration = FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE;
+    if (carSpeed < 0) carSpeed = 0;
   }
   else if (downPressActive)
   {
-	  carAcceleration = -1.0 * FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE;
-	  if (carSpeed > 0) carSpeed = 0;
+    carAcceleration = -1.0 * FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE;
+    if (carSpeed > 0) carSpeed = 0;
   }
   else
   {
-	  carAcceleration = (carSpeed >= 0.0) ? -1.0 * FRICTION_ACCELERATION_MAGNITUDE : FRICTION_ACCELERATION_MAGNITUDE;
+    carAcceleration = (carSpeed >= 0.0) ? -1.0 * FRICTION_ACCELERATION_MAGNITUDE : FRICTION_ACCELERATION_MAGNITUDE;
   }
-  
-  if (leftPressActive)
-  {
-	  carAngle += ANGLE_TURN_RATIO * carSpeed;
-	  carAngle = fmod(carAngle, 360);
-  }
-  else if (rightPressActive)
-  {
-	  carAngle -= ANGLE_TURN_RATIO * carSpeed;
-	  carAngle = fmod(carAngle, 360);
+  Collision(scene, scene->root);
+
+  if (collision == 0) {
+    if (leftPressActive)
+    {
+      carAngle += ANGLE_TURN_RATIO * carSpeed;
+      carAngle = fmod(carAngle, 360);
+    }
+    else if (rightPressActive)
+    {
+      carAngle -= ANGLE_TURN_RATIO * carSpeed;
+      carAngle = fmod(carAngle, 360);
+    }
   }
   
   // update previous time
@@ -384,30 +408,31 @@ void LoadCamera(R3Camera *camera)
   // Set projection transformation
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
+  glViewport(0, 0, GLUTwindow_width, GLUTwindow_height);
   //gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, 0.01, 10000);
   gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
 
   // Set camera transformation
   if (currentView == THIRD_PERSON_VIEW)
   { 
-	 //set camera eye by assuming car at the origin then translating
-	 camera->eye = R3Point(0, camYPos, -1.0 * camZDistance);
-	 camera->eye.Rotate(R3Vector(0.0, 1.0, 0.0), carAngle * (3.14159 / 180.0));
-	 camera->eye += R3Point(playerCarXPos, playerCarYPos, playerCarZPos);
-	 
-	 camera->towards = R3Vector(playerCarXPos - camera->eye[0], playerCarYPos - camera->eye[1], 
-		playerCarZPos - camera->eye[2]);
-	 camera->towards.Normalize();
-	 camera->up = R3Vector(0.0, 1.0, 0.0);
-	 camera->right = camera->towards % camera->up;
-	 camera->right.Normalize();
-	 camera->up = camera->right % camera->towards;
-	 camera->up.Normalize();
+   //set camera eye by assuming car at the origin then translating
+   camera->eye = R3Point(0, camYPos, -1.0 * camZDistance);
+   camera->eye.Rotate(R3Vector(0.0, 1.0, 0.0), carAngle * (3.14159 / 180.0));
+   camera->eye += R3Point(playerCarXPos, playerCarYPos, playerCarZPos);
+   
+   camera->towards = R3Vector(playerCarXPos - camera->eye[0], playerCarYPos - camera->eye[1], 
+    playerCarZPos - camera->eye[2]);
+   camera->towards.Normalize();
+   camera->up = R3Vector(0.0, 1.0, 0.0);
+   camera->right = camera->towards % camera->up;
+   camera->right.Normalize();
+   camera->up = camera->right % camera->towards;
+   camera->up.Normalize();
   }
   //when implement first person, add code here
   else
   {
-	  
+    
   }
   
   R3Vector t = -(camera->towards);
@@ -520,7 +545,7 @@ void LoadLights(R3Scene *scene)
   }
 }
 
-void DrawNode(R3Scene *scene, R3Node *node)
+void DrawNode(R3Scene *scene, R3Node *node, bool isOverview)
 {
   // Push transformation onto stack
   glPushMatrix();
@@ -529,8 +554,8 @@ void DrawNode(R3Scene *scene, R3Node *node)
   //if car, update position and translate to it
   if (node->isPlayerCarMesh)
   {
-	  glTranslatef(playerCarXPos, playerCarYPos, playerCarZPos);
-	  glRotatef(carAngle, 0.0, 1.0, 0.0);
+    glTranslatef(playerCarXPos, playerCarYPos, playerCarZPos);
+    glRotatef(carAngle, 0.0, 1.0, 0.0);
   }
   
 
@@ -538,21 +563,23 @@ void DrawNode(R3Scene *scene, R3Node *node)
   if (node->material) LoadMaterial(node->material);
 
   // Draw shape
-  if (node->shape) DrawShape(node->shape);
-  
+  if (node->shape && !(node->isPlayerCarMesh && isOverview)) DrawShape(node->shape);
+  else {
+
+  }
   //if car, reload identity matrix
   if (node->isPlayerCarMesh) 
   {
-	  R3Matrix r = R3Matrix(1.0, 0.0, 0.0, 0.0, 
-		0.0, 1.0, 0.0, 0.0,
-		0.0, 0.0, 1.0, 0.0, 
-		0.0, 0.0, 0.0, 1.0);
-	  LoadMatrix(&r);
+    R3Matrix r = R3Matrix(1.0, 0.0, 0.0, 0.0, 
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0, 
+    0.0, 0.0, 0.0, 1.0);
+    LoadMatrix(&r);
    }
   
   // Draw children nodes
   for (int i = 0; i < (int) node->children.size(); i++) 
-    DrawNode(scene, node->children[i]);
+    DrawNode(scene, node->children[i], isOverview);
 
   // Restore previous transformation
   glPopMatrix();
@@ -677,10 +704,299 @@ void DrawCamera(R3Scene *scene)
   if (lighting) glEnable(GL_LIGHTING);
 }
 
-void DrawScene(R3Scene *scene) 
+bool myfn(double i, double j)
 {
+	return i < j;
+}
+
+void Collision(R3Scene *scene, R3Node *node)
+{
+  collision = 0;
+	if (node->children.size() == 0 && node->isPlayerCarMesh == 0 && node->isTrack == 0)
+	{
+		double car_minx = scene->player->bbox.XMin();
+		double car_maxx = scene->player->bbox.XMax();
+		double car_minz = scene->player->bbox.ZMin();
+		double car_maxz = scene->player->bbox.ZMax();
+		double obj_minx = node->bbox.XMin();
+		double obj_maxx = node->bbox.XMax();
+		double obj_minz = node->bbox.ZMin();
+		double obj_maxz = node->bbox.ZMax();
+		int intersect = 1;
+		double error = 0;
+		if (car_maxx < obj_minx + error)
+		{
+			intersect = 0;
+		}
+		if (car_minx > obj_maxx + error)
+		{
+			intersect = 0;
+		}
+		if (car_maxz < obj_minz + error)
+		{
+			intersect = 0;
+		}
+		if (car_minz > obj_maxz + error)
+		{
+			intersect = 0;
+		}
+		
+		if (intersect == 1)
+		{
+      collision = 1;
+			// process collisions
+			fprintf(stdout, "collision detected\n");
+			//update car position
+			playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.2; //may need to change to -=
+			playerCarZPos += -carSpeed * cos(toRads(carAngle)) * 0.2;
+			
+			//Update car speed
+			carSpeed = carSpeed * -0.1;
+    //  carAcceleration = -1*carAcceleration;
+		}
+	}
+	// Draw children nodes
+	for (int i = 0; i < (int) node->children.size(); i++) 
+		Collision(scene, node->children[i]);
+}
+
+void DrawScene(R3Scene *scene, bool isOverview) 
+{
+	// Check for collisions
+	Collision(scene, scene->root);
+	
   // Draw nodes recursively
-  DrawNode(scene, scene->root);
+  DrawNode(scene, scene->root, isOverview);
+	
+	R3Matrix r = R3Matrix(1.0, 0.0, 0.0, 0.0, 
+						  0.0, 1.0, 0.0, 0.0,
+						  0.0, 0.0, 1.0, 0.0, 
+						  0.0, 0.0, 0.0, 1.0);
+	r.Translate(R3Vector(playerCarXPos, playerCarYPos, playerCarZPos));
+	//r.Rotate(R3Vector(0.0, 1.0, 0.0), carAngle);
+	//fprintf(stdout,"Box Center: %f, %f, %f\n", scene->player->bbox.XCenter(),scene->player->bbox.YCenter(),scene->player->bbox.ZCenter());
+	//fprintf(stdout,"Translate: %f, %f, %f\n", playerCarXPos, playerCarYPos, playerCarZPos);
+	//fprintf(stdout,"Rotate: %f\n", carAngle);
+	scene->player->bbox = scene->originalbbox;
+	scene->player->bbox.Transform(r);
+	
+	R3Box b = scene->player->bbox;
+	double miny = b.YMin();
+	double maxy = b.YMax();
+	double minx = b.XMin();
+	double minz = b.ZMin();
+	double maxx = b.XMax();
+	double maxz = b.ZMax();
+	double cx = b.XCenter();
+	double cz = b.ZCenter();
+	double height = maxz - minz;
+	double width = maxx - minx;
+	double A = carAngle*3.141592/180;
+	double ULx = cx+width/2*cos(A)-height/2*sin(A);
+	double URx = cx-width/2*cos(A)-(height/2)*sin(A);
+	double BLx = cx+width/2*cos(A)+height/2*sin(A);
+	double BRx = cx-width/2*cos(A)+height/2*sin(A);
+	double ULz = cz+height/2*cos(A) + width/2*sin(A);
+	double URz = cz+height/2*cos(A)-width/2*sin(A);
+	double BLz = cz-height/2*cos(A)+width/2*sin(A);
+	double BRz = cz-height/2*cos(A)-width/2*sin(A);
+	vector<double> x_values;
+	vector<double> z_values;
+	x_values.push_back(ULx);
+	x_values.push_back(URx);
+	x_values.push_back(BLx);
+	x_values.push_back(BRx);
+	z_values.push_back(ULz);
+	z_values.push_back(URz);
+	z_values.push_back(BLz);
+	z_values.push_back(BRz);
+	minx = *std::min_element(x_values.begin(),x_values.end(),myfn);
+	minz = *std::min_element(z_values.begin(),z_values.end(),myfn);
+	maxx = *std::max_element(x_values.begin(),x_values.end(),myfn);
+	maxz = *std::max_element(z_values.begin(),z_values.end(),myfn);
+	scene->player->bbox.Reset(R3Point(minx,miny,minz), R3Point(maxx,maxy,maxz));
+	
+	// check all four points of rectangle
+	/*double x0 = b.XCenter();
+	 double z0 = b.ZCenter();
+	 double x1 = x0 + (b.XMin()-x0)*cos(carAngle)+(b.ZMin()-z0)*sin(carAngle);
+	 double z1 = z0 - (b.XMin()-x0)*sin(carAngle)+(b.ZMin()-z0)*cos(carAngle);
+	 double x2 = x0 + (b.XMax()-x0)*cos(carAngle)+(b.ZMax()-z0)*sin(carAngle);
+	 double z2 = z0 - (b.XMax()-x0)*sin(carAngle)+(b.ZMax()-z0)*cos(carAngle);
+	 double minx;
+	 double minz;
+	 double maxx;
+	 double maxz;
+	 double miny = b.YMin();
+	 double maxy = b.YMax();
+	 if (x1 < x2)
+	 {
+	 minx = x1;
+	 maxx = x2;
+	 }
+	 else {
+	 minx = x2;
+	 maxx = x1;
+	 }
+	 if (z1 < x2)
+	 {
+	 minz = z1;
+	 maxz = z2;
+	 }
+	 else {
+	 minz = z2;
+	 maxz = z1;
+	 }
+	 scene->player->bbox.Reset(R3Point(minx,miny,minz), R3Point(maxx,maxy,maxz));*/
+	
+	//fprintf(stdout,"BoxMin: %f, %f, %f\n", scene->player->bbox.Min().X(), scene->player->bbox.Min().Y(), scene->player->bbox.Min().Z());
+	//fprintf(stdout,"BoxMax: %f, %f, %f\n", scene->player->bbox.Max().X(), scene->player->bbox.Max().Y(), scene->player->bbox.Max().Z());
+	//scene->player->bbox.Transform(r);
+	/*scene->player->bbox.Outline();*/
+	
+}
+
+void GenerateParticles(R3Scene *scene, double current_time, double delta_time)
+{
+	for (int i = 0; i < scene->NParticleSources(); i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			R3Particle *particle = new R3Particle();
+			double z = (rand() % 2001 - 1000.0)/1000.0*scene->ParticleSource(i)->shape->sphere->Radius();
+			double phi = (rand() % 1001)/1000.0*2*3.1415927;
+			double d = sqrt(scene->ParticleSource(i)->shape->sphere->Radius()*scene->ParticleSource(i)->shape->sphere->Radius() - z*z);
+			//double px = scene->ParticleSource(i)->shape->sphere->Center().X() + d*cos(phi);
+			//double py = scene->ParticleSource(i)->shape->sphere->Center().Y() + d*sin(phi);
+			//double pz = scene->ParticleSource(i)->shape->sphere->Center().Z() + z;
+			double px = scene->player->bbox.Centroid().X() + d*cos(phi);
+			double py = (scene->player->bbox.Centroid().Y() + 40) + d*sin(phi);
+			double pz = scene->player->bbox.Centroid().Z() + z;
+			particle->position = R3Point(px,py,pz);
+			particle->material = scene->ParticleSource(i)->material;
+			//R3Vector N = particle->position - scene->ParticleSource(i)->shape->sphere->Center();
+			R3Vector N = particle->position - scene->player->bbox.Centroid();
+			N.Normalize();
+			double x_tangent = N.X();
+			double y_tangent = N.Y();
+			double z_tangent = -(N.X()*N.X() + N.Y()*N.Y())/N.Z();
+			R3Vector A = R3Vector(x_tangent, y_tangent, z_tangent);
+			A.Normalize();
+			double t1 = (rand() % 1001)/1000.0*2*3.1415927;
+			double t2 = (rand() % 1001)/1000.0*sin(scene->ParticleSource(i)->angle_cutoff);
+			R3Vector V = A;
+			V.Rotate(N,t1);
+			R3Vector *VxN = new R3Vector(V);
+			VxN->Cross(N);
+			V.Rotate(*VxN,acos(t2));
+			V.Normalize();
+			V = V*scene->ParticleSource(i)->velocity;
+			particle->velocity = V;
+			delete VxN;
+			particle->drag = scene->ParticleSource(i)->drag;
+			particle->mass = scene->ParticleSource(i)->mass;
+			particle->lifetime = scene->ParticleSource(i)->lifetime;
+			particle->timeborn = current_time;
+			scene->particles.push_back(particle);
+		}
+	}
+}
+
+void UpdateParticles(R3Scene *scene, double current_time, double delta_time)
+{
+	for (int i = 0; i < scene->NParticles(); i++)
+	{
+		scene->gravity = R3Vector(0, -9.80665, 0);
+		R3Vector fg = scene->Particle(i)->mass*scene->gravity;
+		R3Vector fd = -scene->Particle(i)->drag*scene->Particle(i)->velocity;
+		
+		scene->Particle(i)->position += delta_time*scene->Particle(i)->velocity*0.5;
+		scene->Particle(i)->velocity += delta_time*(fg+fd)/scene->Particle(i)->mass;
+		
+		if (scene->Particle(i)->timeborn < -1e60)
+		{
+			scene->Particle(i)->timeborn = 0.0;
+		}
+		if (current_time - scene->Particle(i)->timeborn > scene->Particle(i)->lifetime + 1e-6)
+		{
+			scene->particles.erase(scene->particles.begin() + i);
+			i--;
+		}
+	}
+}
+
+void DrawParticles(R3Scene *scene)
+{
+	// Get current time (in seconds) since start of execution
+	double current_time = GetTime();
+	static double previous_time = 0;
+	
+	// program just started up?
+	if (previous_time == 0) previous_time = current_time;
+	
+	// time passed since starting
+	double delta_time = current_time - previous_time;
+	
+	// Update particles
+	UpdateParticles(scene, current_time, delta_time);
+	
+	// Generate new particles
+	if (show_rain) GenerateParticles(scene, current_time, delta_time);
+	
+	// Render particles
+	//if (show_particles) RenderParticles(scene, current_time - time_lost_taking_videos, delta_time);
+	glDisable(GL_LIGHTING);
+	glPointSize(1);
+	glColor3d(0.5, 0.5, 0.5);
+	glBegin(GL_LINES);
+	for (int i = 0; i < scene->NParticles(); i++) {
+		R3Particle *particle = scene->Particle(i);
+		glColor3d(particle->material->kd[0], particle->material->kd[1], particle->material->kd[2]);
+		const R3Point& position = particle->position;
+		glVertex3d(position[0], position[1], position[2]);
+		glVertex3d(position[0]+0.05, position[1]+0.35, position[2]);
+	}   
+	glEnd();
+	
+	// Remember previous time
+	previous_time = current_time;
+}
+
+
+void DrawParticleSources(R3Scene *scene)
+{
+	// Check if should draw particle sources
+	//if (!show_particle_sources_and_sinks) return;
+	
+	// Setup
+	GLboolean lighting = glIsEnabled(GL_LIGHTING);
+	glEnable(GL_LIGHTING);
+	
+	// Define source material
+	static R3Material source_material;
+	if (source_material.id != 33) {
+		source_material.ka.Reset(0.2,0.2,0.2,1);
+		source_material.kd.Reset(0,1,0,1);
+		source_material.ks.Reset(0,1,0,1);
+		source_material.kt.Reset(0,0,0,1);
+		source_material.emission.Reset(0,0,0,1);
+		source_material.shininess = 1;
+		source_material.indexofrefraction = 1;
+		source_material.texture = NULL;
+		source_material.texture_index = -1;
+		source_material.id = 33;
+	}
+	
+	// Draw all particle sources
+	glEnable(GL_LIGHTING);
+	LoadMaterial(&source_material);
+	for (int i = 0; i < scene->NParticleSources(); i++) {
+		R3ParticleSource *source = scene->ParticleSource(i);
+		DrawShape(source->shape);
+	}
+	
+	// Clean up
+	if (!lighting) glDisable(GL_LIGHTING);
 }
 
 ////////////////////////////////////////////////////////////
@@ -716,28 +1032,6 @@ void GLUTPrint(double x, double y, char * text)
   #endif  
 }
 
-void drawText(void)
-{
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0.0, GLUTwindow_width, GLUTwindow_height, 0.0, -1.0, 10.0);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glClear(GL_DEPTH_BUFFER_BIT);
-    glColor3f(1.0f,1.0f,1.0f);
-
-    GLUTPrint(200, 50, (char*) "Time: 00:40s");
-    GLUTPrint(50, 400, (char*) "Position: 2nd out of 10");
-    GLUTPrint(50, 450, (char*) "Speed: 60mph");
-    GLUTPrint(400, 400, (char*) "Track");
-
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);  
-}
-
 void GLUTStop(void)
 {
   // Destroy window 
@@ -766,44 +1060,168 @@ void GLUTResize(int w, int h)
   glutPostRedisplay();
 }
 
-void GLUTRedrawHUV(void) {
-  glutSetWindow(subWindow2);
 
-  // Initialize OpenGL drawing modes
-  glEnable(GL_LIGHTING);
-  glDisable(GL_BLEND);
-  glBlendFunc(GL_ONE, GL_ZERO);
-  glDepthMask(true);
+void drawHUD(void)
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, 500, 500, 0.0, -1.0, 10.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glDisable(GL_LIGHTING); 
 
-  // Clear window 
-  R3Rgb background = scene->background;
-  glClearColor(background[0], background[1], background[2], background[3]);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glColor3d(1.0f, 1.0f, 1.0f);
+    
+    double curtime = GetTime();
+    static double prevtime = 0;
+    if (prevtime == 0) prevtime = curtime;
+    sprintf(time_str, "Time: %4.1f", curtime);
+    prevtime = curtime;
 
-  // Load camera
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  //gluPerspective(2*180.0*camera->yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, 0.01, 10000);
-  gluPerspective(2*180.0*camera.yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
+    double mph = abs(carSpeed) * 2.23694;
+    sprintf(speed_str, "Speed: %2.0f mph", mph);
 
-  // Set camera transformation
-  R3Vector t = -(camera.towards);
+    sprintf(lap_str, "Lap: %d of 3", lap);
 
-  gluLookAt(0,100,0, 0, 99, 0, t[0], 0, t[1]);
+    GLUTPrint(400,75, time_str);
+    GLUTPrint(50,400,"Position: 2nd out of 10");
+    GLUTPrint(50,450, speed_str);
+    GLUTPrint(385,360,"Track");
+    GLUTPrint(400,50, lap_str);
 
-  // Load scene lights
-  LoadLights(scene);
+    glBegin(GL_QUADS);
+        glVertex2f(380, 380); // vertex 1
+        glVertex2f(380, 475); // vertex 2
+        glVertex2f(475, 475); // vertex 3
+        glVertex2f(475, 380); // vertex 4
+    glEnd();
 
 
-  // Draw scene surfaces
-  if (show_faces) {
+    GLfloat x;
+    GLfloat y; 
+    GLfloat s;
+    GLfloat t;
+   
+    const GLfloat delta_angle = 2.0*M_PI/360;
+   
+  //  glEnable(GL_TEXTURE_2D);
+  //  glBindTexture(GL_TEXTURE_2D, speedometerid);
+
+  //  glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+
+    glBegin(GL_TRIANGLE_FAN);   
+    glColor3d(0.5, 0.5, 0.5);
+
+    //draw the vertex at the center of the circle
+  //  texcoord[0] = 0.5;
+  //  texcoord[1] = 0.5;
+  //  glTexCoord2fv(texcoord);
+          
+    glVertex2f(75, 420);
+   
+    for(int i = 0; i < 361; i++)
+    {
+  //    texcoord[0] = (std::cos(delta_angle*i) + 1.0)*0.5;
+  //    texcoord[1] = (std::sin(delta_angle*i) + 1.0)*0.5;
+  //    glTexCoord2fv(texcoord);
+   
+      x = 75 + cos(delta_angle*i) * 75;
+      y = 420 + sin(delta_angle*i) * 75;
+      glVertex2f(x,y);
+    }
+   
+   // texcoord[0] = (1.0 + 1.0)*0.5;
+   // texcoord[1] = (0.0 + 1.0)*0.5;
+   // glTexCoord2fv(texcoord);
+    glEnd();
+   
+   // glDisable(GL_TEXTURE_2D);
+    glEnable(GL_LIGHTING); 
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);  
+}
+
+void drawMiniMapView(void) {
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   glViewport(2*GLUTwindow_width/3, 0, GLUTwindow_width/3 , GLUTwindow_height/3);
+   gluPerspective(2*180.0*camera.yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
+   glMatrixMode(GL_MODELVIEW);
+   glScissor((2*GLUTwindow_width/3), 0, GLUTwindow_width/3 , GLUTwindow_height/3);
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   glLoadIdentity();
+   R3Vector t = -(camera.towards);
+
+   //gluLookAt(0,100,0, 0, 99, 0, t[0], 0, t[1]);
+   gluLookAt(0,200,0, 0, 99, 0, 0, 0, 1);
+   LoadLights(scene);
+   glEnable(GL_LIGHTING);
+   DrawScene(scene, false);
+}
+
+void drawRearViewMirror(void) {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glViewport(10, 4*GLUTwindow_height/5-10, GLUTwindow_width/5 , GLUTwindow_height/5);
+    gluPerspective(2*180.0*camera.yfov/M_PI, (GLdouble) GLUTwindow_width /(GLdouble) GLUTwindow_height, .01, 10000);
+    glMatrixMode(GL_MODELVIEW);
+    glScissor(10, 4*GLUTwindow_height/5-10, GLUTwindow_width/5 , GLUTwindow_height/5);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+
+    R3Vector t = R3Vector(camera.towards.X(), 0, camera.towards.Z());
+    R3Vector r = (camera.right);
+    R3Vector u = r % t;
+    
+    GLdouble camera_matrix[16] = { r[0], u[0], t[0], 0, r[1], u[1], t[1], 0, r[2], u[2], t[2], 0, 0, 0, 0, 1 };
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glMultMatrixd(camera_matrix);
+    glTranslated(-(camera.eye[0]), playerCarYPos-10, -(camera.eye[2]));
+
+    //gluLookAt(0,200,0, 0, 99, 0, 0, 0, 1);
+    LoadLights(scene);
     glEnable(GL_LIGHTING);
-    DrawScene(scene);
-  }
+    DrawScene(scene, false);
+}
 
-  // Swap buffers 
-  glutSwapBuffers();
+void LoadHeadLight(void) {
+  GLfloat lightbuffer[4];
 
+  glDisable(GL_LIGHT5);
+  GLfloat headlight_diffuse[] = { 1.0, 1.0, 1.0, 1.0 };
+  GLfloat headlight_specular[] = { 1.0, 1.0, 1.0, 1.0 };
+
+  glLightfv(GL_LIGHT5, GL_DIFFUSE, headlight_diffuse);
+  glLightfv(GL_LIGHT5, GL_SPECULAR, headlight_specular);
+
+  glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION, 1);
+  glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION, 1);
+  glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 1);
+
+  // Load spot light behavior
+
+  glLightf(GL_LIGHT5, GL_SPOT_CUTOFF, 1);
+  glLightf(GL_LIGHT5, GL_SPOT_EXPONENT, 1);
+
+  lightbuffer[0] = 0;
+  lightbuffer[1] = 0;
+  lightbuffer[2] = 0;
+  lightbuffer[3] = 1.0;
+
+  glLightfv(GL_LIGHT5, GL_POSITION, lightbuffer);
+
+  lightbuffer[0] = 0;
+  lightbuffer[1] = 0;
+  lightbuffer[2] = 0;
+  lightbuffer[3] = 1.0;  
+  glLightfv(GL_LIGHT5, GL_SPOT_DIRECTION, lightbuffer);
+
+  glEnable(GL_LIGHT5);
 }
 
 void GLUTRedrawMain(void)
@@ -811,6 +1229,8 @@ void GLUTRedrawMain(void)
   Update();
 
   glutSetWindow(GLUTwindow);
+  glEnable(GL_SCISSOR_TEST);
+
   // Initialize OpenGL drawing modes
   glEnable(GL_LIGHTING);
   glDisable(GL_BLEND);
@@ -823,21 +1243,36 @@ void GLUTRedrawMain(void)
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // Load camera
+  glScissor(0, 0, GLUTwindow_width , GLUTwindow_height);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
   LoadCamera(&camera);
 
   // Load scene lights
   LoadLights(scene);
+	
+  // Draw particles
+  DrawParticles(scene);
+
+  // Draw particle sources 
+  //DrawParticleSources(scene);
+
+  LoadHeadLight();
 
   // Draw scene surfaces
   if (show_faces) {
     glEnable(GL_LIGHTING);
-    DrawScene(scene);
+    DrawScene(scene, false);
   }
+  drawHUD();
+
+  drawMiniMapView();
+  drawRearViewMirror();
+  glDisable(GL_SCISSOR_TEST);
 
   // Swap buffers 
+  glFlush();
   glutSwapBuffers();
-  
-  GLUTRedrawHUV();
   
   // Network Stuff
   if (connected) {
@@ -845,7 +1280,7 @@ void GLUTRedrawMain(void)
 
       if (is_client) {
           char* data = "opinions!\n";
-          if (write(data, socket_desc) == 0) {
+          if (client_write(data, socket_desc) == 0) {
               fprintf(stderr, "Successful client send (probably)\n");
           }
           else {
@@ -853,7 +1288,7 @@ void GLUTRedrawMain(void)
           }
       }
       else {
-         char* data_received = receive(socket_desc);
+         char* data_received = server_receive(socket_desc);
          if (data_received != NULL) {
              fprintf(stderr, "Got data: %s\n", data_received);
          }
@@ -933,7 +1368,7 @@ void GLUTSpecial(int key, int x, int y)
   case GLUT_KEY_UP:
     upPressActive = true;
     downPressActive = false;
-	break;
+  break;
   case GLUT_KEY_DOWN:
     downPressActive = true;
     upPressActive = false;
@@ -945,7 +1380,31 @@ void GLUTSpecial(int key, int x, int y)
   case GLUT_KEY_RIGHT:
     rightPressActive = true;
     leftPressActive = false;
-	break;
+  break;
+  }
+
+  // Remember mouse position 
+  GLUTmouse[0] = x;
+  GLUTmouse[1] = y;
+
+  // Remember modifiers 
+  GLUTmodifiers = glutGetModifiers();
+
+  // Redraw
+  glutPostRedisplay();
+}
+
+void GLUTKeyboard(unsigned char key, int x, int y)
+{
+  // Invert y coordinate
+  y = GLUTwindow_height - y;
+
+  // Process keyboard button event 
+  switch (key) {
+	  case 'R':
+	  case 'r':
+		show_rain = !show_rain;
+		break;
   }
 
   // Remember mouse position 
@@ -966,18 +1425,18 @@ void GLUTSpecialUp(int key, int x, int y)
 
   // Process keyboard button event 
   switch (key) {
-  case GLUT_KEY_UP:
-    upPressActive = false;
-	break;
-  case GLUT_KEY_DOWN:
-    downPressActive = false;
-    break;
-  case GLUT_KEY_LEFT:
-    leftPressActive = false;
-    break;
-  case GLUT_KEY_RIGHT:
-    rightPressActive = false;
-	break;
+	  case GLUT_KEY_UP:
+		upPressActive = false;
+		break;
+	  case GLUT_KEY_DOWN:
+		downPressActive = false;
+		break;
+	  case GLUT_KEY_LEFT:
+		leftPressActive = false;
+		break;
+	  case GLUT_KEY_RIGHT:
+		rightPressActive = false;
+		break;
   }
 
   // Remember mouse position 
@@ -1014,6 +1473,7 @@ void GLUTInit(int *argc, char **argv)
   glutIdleFunc(GLUTIdle);
   glutReshapeFunc(GLUTResize);
   glutDisplayFunc(GLUTRedrawMain);
+  glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
   glutSpecialUpFunc(GLUTSpecialUp);
   glutMotionFunc(GLUTMotion);
@@ -1023,12 +1483,6 @@ void GLUTInit(int *argc, char **argv)
   glEnable(GL_LIGHTING);
   glEnable(GL_DEPTH_TEST);
   glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
- 
-
-  subWindow2 = glutCreateSubWindow(GLUTwindow, 0,0,GLUTwindow_width/3, GLUTwindow_height/3);
-  glutDisplayFunc(GLUTRedrawHUV);
-  glutReshapeFunc(GLUTResize);
-
 }
 
 ////////////////////////////////////////////////////////////
@@ -1198,7 +1652,7 @@ int main(int argc, char **argv) {
     config_map = create_config();
     if (use_networking) {
         if (is_client) {
-            socket_desc = init_client(ip_address, port);
+            socket_desc = client_init(ip_address, port);
             if (socket_desc != -1) { 
                 fprintf(stderr, "Successful client init (probably) with socket desc %d\n", socket_desc);
                 connected = true;
@@ -1210,7 +1664,7 @@ int main(int argc, char **argv) {
         }
         else {
             // code for initializing server.
-            socket_desc = init_server(port);
+            socket_desc = server_init(port);
             if (socket_desc != -1) {
                 fprintf(stderr, "Successful server init (probably) with socket desc %d\n", socket_desc);
                 connected = true;
