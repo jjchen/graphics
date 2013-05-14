@@ -77,7 +77,6 @@ char* server_receive(int socket_desc) {
     }
 
     /* Shows the data */
-    printf("Received data from the f***ing client: %s\n", buff);
     return buff;
     
     /* Echo some bytes of string, back */

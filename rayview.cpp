@@ -1279,8 +1279,9 @@ void GLUTRedrawMain(void)
       fprintf(stderr, "about to listen/send\n");
 
       if (is_client) {
-          char* data = "%f %f %f", playerCarXPos, playerCarYPos, playerCarZPos;
-          if (client_write(data, socket_desc) == 0) {
+          char my_string[34];
+          sprintf(my_string, "%10.4f %10.4f %10.4f", playerCarXPos, playerCarYPos, playerCarZPos);
+          if (client_write(my_string, socket_desc) == 0) {
               fprintf(stderr, "Successful client send (probably)\n");
           }
           else {
