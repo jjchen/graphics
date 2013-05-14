@@ -1287,8 +1287,6 @@ void GLUTRedrawMain(void)
 			  sprintf(my_string, "%3d,%3d,%3d", (int) playerCarXPos, (int) playerCarYPos, (int)playerCarZPos);
 			  if (client_write(my_string, socket_desc) == 0) {
 				  fprintf(stderr, "Successful client send (probably)\n");
-				  client_close(socket_desc);
-				  server_close(socket_desc);
 			  }
 			  else {
 				  fprintf(stderr, "Couldn't send to server!\n");
