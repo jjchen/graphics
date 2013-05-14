@@ -26,6 +26,7 @@
 void Update();
 void Collision(R3Scene *scene, R3Node *node);
 double toRads(double degrees);
+void LoadHeadLight(bool isMiniMap);
 
 ////////////////////////////////////////////////////////////
 // GLOBAL VARIABLES
@@ -46,6 +47,7 @@ static int show_camera = 0;
 static int save_image = 0;
 static int quit = 0;
 static bool show_rain = false;
+static bool show_headlight = false;
 static int first = 1;
 
 static double maxtime = 360;
@@ -122,7 +124,7 @@ static double ACCELERATION_DUE_TO_GRAVITY = 9.8;
 static double GROUND_FRICTION_COEFFICIENT = 0.7;
 static double FRICTION_ACCELERATION_MAGNITUDE = GROUND_FRICTION_COEFFICIENT * ACCELERATION_DUE_TO_GRAVITY;
 static double FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE = 12.0; 
-static double ANGLE_TURN_RATIO = 0.1;
+static double ANGLE_TURN_RATIO = 0.05;
 char time_str[50];
 char speed_str[50];
 char timeleft_str[50];
@@ -431,7 +433,12 @@ void LoadMatrix(R3Matrix *matrix)
   glMultMatrixd((double *) &m);
 }
 
-void LoadMaterial(R3Material *material) 
+static GLuint speedometer_texture_index = 0;
+static GLuint wintexture = 0;
+static GLuint losetexture = 0;
+
+
+void LoadMaterial(R3Material *material, bool isSpeedometer, bool isWin, bool isLose) 
 {
   GLfloat c[4];
 
@@ -496,6 +503,9 @@ void LoadMaterial(R3Material *material)
         *(bufferp++) = pixelsp->Alpha();
         pixelsp++;
       }
+      if (isSpeedometer) speedometer_texture_index = texture_index;
+      if (isWin) wintexture = texture_index;
+      if (isLose) losetexture = texture_index;
       glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
@@ -593,18 +603,28 @@ void Update()
     carAcceleration = (carSpeed >= 0.0) ? -1.0 * FRICTION_ACCELERATION_MAGNITUDE : FRICTION_ACCELERATION_MAGNITUDE;
   }
 
-  Collision(scene, scene->root);
-
   if (collision == 0) {
+    double carAngleBefore = carAngle;
     if (leftPressActive)
     {
       carAngle += ANGLE_TURN_RATIO * carSpeed;
       carAngle = fmod(carAngle, 360);
+      Collision(scene, scene->root);
+      if (collision == 1) {
+        fprintf(stdout, "collision\n");
+        carAngle = carAngleBefore;
+      }
     }
     else if (rightPressActive)
     {
       carAngle -= ANGLE_TURN_RATIO * carSpeed;
       carAngle = fmod(carAngle, 360);
+      Collision(scene, scene->root);
+      if (collision == 1) {
+        carAngle = carAngleBefore;
+        fprintf(stdout, "collision\n");
+
+      }
     }
   }
   
@@ -769,20 +789,10 @@ void DrawNode(R3Scene *scene, R3Node *node, bool isOverview)
   
 
   // Load material
-  if (node->material) LoadMaterial(node->material);
+  if (node->material) LoadMaterial(node->material, node->isSpeedometer, node->isWin, node->isLose);
 
   // Draw shape
-  if (node->shape && !(node->isPlayerCarMesh && isOverview)) DrawShape(node->shape);
-
-  if (node->isPlayerCarMesh && isOverview) {
-    glPushMatrix();
-    glTranslated(10, 100, -50);
-    glDisable(GL_LIGHTING);
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glutSolidSphere(10, 50, 50);
-    glEnable(GL_LIGHTING);
-    glPopMatrix();
-  }
+  if (node->shape && !(node->isPlayerCarMesh && isOverview) && !node->isSpeedometer && !node->isWin && !node->isLose) DrawShape(node->shape);
 
   //if car, reload identity matrix
   if (node->isPlayerCarMesh) 
@@ -947,7 +957,7 @@ void Collision(R3Scene *scene, R3Node *node)
     node->shape->box->Transform(node->parent->transformation.Inverse());
 
     int intersect = 1;
-    double error = 1.5;
+    double error = 1;
     if (car_maxx < obj_minx + error)
     {
       intersect = 0;
@@ -967,11 +977,12 @@ void Collision(R3Scene *scene, R3Node *node)
     
     if (intersect == 1)
     {
+
       collision = 1;
       // process collisions
       //update car position
-      playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.2; //may need to change to -=
-      playerCarZPos += -carSpeed * cos(toRads(carAngle)) * 0.2;
+      playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.3; //may need to change to -=
+      playerCarZPos += -carSpeed * cos(toRads(carAngle)) * 0.3;
       
       //Update car speed
       carSpeed = carSpeed * -0.5;
@@ -1212,7 +1223,7 @@ void DrawParticleSources(R3Scene *scene)
 	
 	// Draw all particle sources
 	glEnable(GL_LIGHTING);
-	LoadMaterial(&source_material);
+	LoadMaterial(&source_material, false, false, false);
 	for (int i = 0; i < scene->NParticleSources(); i++) {
 		R3ParticleSource *source = scene->ParticleSource(i);
 		DrawShape(source->shape);
@@ -1289,7 +1300,7 @@ void drawHUD(void)
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    glOrtho(0.0, 500, 500, 0.0, -1.0, 10.0);
+    glOrtho(0.0, GLUTwindow_width, GLUTwindow_height, 0.0, -1.0, 10.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glDisable(GL_LIGHTING); 
@@ -1302,24 +1313,15 @@ void drawHUD(void)
     timeleft = maxtime - curtime;
     sprintf(timeleft_str, "Time Left: %4.1f", timeleft);
 
-    double mph = abs(carSpeed) * 2.23694;
+    double mph = abs(carSpeed) * 2.23694*2;
     sprintf(speed_str, "%2.0f mph", mph);
 
     sprintf(lap_str, "Lap: %d of 3", lap);
 
-    GLUTPrint(400,75, time_str);
-    GLUTPrint(400,100, timeleft_str);
-    GLUTPrint(50,450, speed_str);
-    GLUTPrint(385,360,"Track");
-    GLUTPrint(400,50, lap_str);
-
-    glBegin(GL_QUADS);
-        glVertex2f(380, 380); // vertex 1
-        glVertex2f(380, 475); // vertex 2
-        glVertex2f(475, 475); // vertex 3
-        glVertex2f(475, 380); // vertex 4
-    glEnd();
-
+    GLUTPrint(GLUTwindow_width - 100,75, time_str);
+    GLUTPrint(GLUTwindow_width - 100,100, timeleft_str);
+    GLUTPrint(50, GLUTwindow_height-100, speed_str);
+    GLUTPrint(GLUTwindow_width-100,50, lap_str);
 
     GLfloat x;
     GLfloat y; 
@@ -1328,38 +1330,33 @@ void drawHUD(void)
    
     const GLfloat delta_angle = 2.0*M_PI/360;
    
-  //  glEnable(GL_TEXTURE_2D);
-  //  glBindTexture(GL_TEXTURE_2D, speedometerid);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, speedometer_texture_index);
 
-  //  glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
-
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
     glBegin(GL_TRIANGLE_FAN);   
-    glColor3d(0.5, 0.5, 0.5);
+//    glColor3d(0.5, 0.5, 0.5);
 
     //draw the vertex at the center of the circle
-  //  texcoord[0] = 0.5;
-  //  texcoord[1] = 0.5;
-  //  glTexCoord2fv(texcoord);
+    s = 0.5;
+    t = 0.5;
+    glTexCoord2f(s,t);
           
-    glVertex2f(75, 420);
+    glVertex2f(75, GLUTwindow_height-100);
    
     for(int i = 0; i < 361; i++)
     {
-  //    texcoord[0] = (std::cos(delta_angle*i) + 1.0)*0.5;
-  //    texcoord[1] = (std::sin(delta_angle*i) + 1.0)*0.5;
-  //    glTexCoord2fv(texcoord);
-   
+      s = (-sin(delta_angle*i)+1.0)*0.5;
+      t = (cos(delta_angle*i)+1.0)*0.5;
+      glTexCoord2f(s,t);
+
       x = 75 + cos(delta_angle*i) * 75;
-      y = 420 + sin(delta_angle*i) * 75;
+      y = GLUTwindow_height-100 + sin(delta_angle*i) * 75;
       glVertex2f(x,y);
     }
-   
-   // texcoord[0] = (1.0 + 1.0)*0.5;
-   // texcoord[1] = (0.0 + 1.0)*0.5;
-   // glTexCoord2fv(texcoord);
     glEnd();
    
-   // glDisable(GL_TEXTURE_2D);
+    glDisable(GL_TEXTURE_2D);
     glEnable(GL_LIGHTING); 
 
     glMatrixMode(GL_PROJECTION);
@@ -1382,6 +1379,7 @@ void drawMiniMapView(void) {
    gluLookAt(0,1500,0, 150, 99, 200, 0, 0, 1);
    LoadLights(scene);
    glEnable(GL_LIGHTING);
+   LoadHeadLight(true);
    DrawScene(scene, true);
 }
 
@@ -1411,43 +1409,48 @@ void drawRearViewMirror(void) {
     DrawScene(scene, false);
 }
 
-void LoadHeadLight(void) {
+void LoadHeadLight(bool isMiniMap) {
   GLfloat lightbuffer[4];
 
   glDisable(GL_LIGHT5);
-  GLfloat headlight_diffuse[] = { 0.0, 1.0, 1.0, 1.0 };
+  GLfloat headlight_diffuse[] = { 1.0, 0.0, 0.0, 1.0 };
   GLfloat headlight_specular[] = { 1.0, 1.0, 1.0, 1.0 };
 
   glLightfv(GL_LIGHT5, GL_DIFFUSE, headlight_diffuse);
   glLightfv(GL_LIGHT5, GL_SPECULAR, headlight_specular);
 
-  glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION, 1);
-  glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION, 1);
-  glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 1);
+  glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION, 0.001);
+  glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION, 0.001);
+  glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 0.001);
 
   // Load spot light behavior
 
-  glLightf(GL_LIGHT5, GL_SPOT_CUTOFF, 100);
-  glLightf(GL_LIGHT5, GL_SPOT_EXPONENT, 1);
+  glLightf(GL_LIGHT5, GL_SPOT_CUTOFF, 30);
+  glLightf(GL_LIGHT5, GL_SPOT_EXPONENT, 2);
 
   lightbuffer[0] = playerCarXPos;
-  lightbuffer[1] = playerCarYPos;
+  lightbuffer[1] = 10;
   lightbuffer[2] = playerCarZPos;
   lightbuffer[3] = 1.0;
 
   glLightfv(GL_LIGHT5, GL_POSITION, lightbuffer);
 
-  lightbuffer[0] = -sin(carAngle);
-  lightbuffer[1] = 0;
+  lightbuffer[0] = sin(carAngle);
+  lightbuffer[1] = -1;
   lightbuffer[2] = cos(carAngle);
   lightbuffer[3] = 1.0;  
-  glLightfv(GL_LIGHT5, GL_SPOT_DIRECTION, lightbuffer);
 
+  if (isMiniMap) {
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    R3Sphere(R3Point(playerCarXPos, 5, playerCarZPos),10).Draw();
+    glEnable(GL_LIGHTING);
+  }
   glEnable(GL_LIGHT5);
 }
 
 
-void drawEnd(char* message)
+void drawEnd(bool win)
 {
    glMatrixMode(GL_PROJECTION);
    glLoadIdentity();
@@ -1462,16 +1465,17 @@ void drawEnd(char* message)
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    glOrtho(0.0, 500, 500, 0.0, -1.0, 10.0);
+    glOrtho(0.0, GLUTwindow_width, GLUTwindow_height, 0.0, -1.0, 10.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
     glDisable(GL_LIGHTING); 
+
     glColor3f(0.0f, 0.0f, 1.0f);
     GLUTPrint(220, 375, "Replay");
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    GLUTPrint(225, 225, message);
+//    GLUTPrint(225, 225, message);
     glBegin(GL_QUADS);
         glVertex2f(200, 350); // vertex 1
         glVertex2f(200, 400); // vertex 2
@@ -1479,6 +1483,25 @@ void drawEnd(char* message)
         glVertex2f(300, 350); // vertex 4
     glEnd();
 
+    glEnable(GL_TEXTURE_2D);
+    if (win) {
+        glBindTexture(GL_TEXTURE_2D, wintexture);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, losetexture);
+    }
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+
+    glBegin(GL_QUADS);
+        glTexCoord2f(0.0,0.0);
+        glVertex2f(0.0, 0.0); // vertex 1
+        glTexCoord2f(1.0,0.0);
+        glVertex2f(GLUTwindow_width, 0.0); // vertex 2
+        glTexCoord2f(1.0,1.0);
+        glVertex2f(GLUTwindow_width, GLUTwindow_height); // vertex 3
+        glTexCoord2f(0.0,1.0);
+        glVertex2f(0.0, GLUTwindow_height); // vertex 4
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
     glEnable(GL_LIGHTING); 
     
     glMatrixMode(GL_PROJECTION);
@@ -1495,19 +1518,30 @@ void GLUTRedrawMain(void)
     show_end = 1;
     carSpeed = 0;
     carAcceleration = 0;
-    drawEnd("LOSE!");
+    drawEnd(false);
     return;
   }
+
+  if (lap == 3) {
+      int sourceAudioState = 0;
+
+    show_rain = true;
+    FRICTION_ACCELERATION_MAGNITUDE = 0.1 * ACCELERATION_DUE_TO_GRAVITY;
+        alGetSourcei(sound_source[0], AL_SOURCE_STATE, &sourceAudioState);
+        if(sourceAudioState != AL_PLAYING)
+            alSourcePlay(sound_source[0]); 
+   }
+
   double curtime = GetTime();
   if (lapStartTime == 0) {
     lapStartTime = GetTime();
   }
   if ((curtime-lapStartTime > 40) && (playerCarXPos <= 9.5 && playerCarXPos >= 8.5) && (playerCarZPos <= 0.0 && playerCarZPos >= -20)) {
-    if (lap == 1) {
+    if (lap == 3) {
       show_end = 1;
       carSpeed = 0;
       carAcceleration = 0;
-      drawEnd("WIN!");
+      drawEnd(true);
       return;
     }
     lapStartTime = GetTime();
@@ -1549,7 +1583,7 @@ void GLUTRedrawMain(void)
   // Draw particle sources 
   //DrawParticleSources(scene);
 
-  LoadHeadLight();
+  if (show_headlight) LoadHeadLight(false);
 
   // Draw scene surfaces
   if (show_faces) {
@@ -1706,21 +1740,25 @@ void GLUTKeyboard(unsigned char key, int x, int y)
 {
   // Invert y coordinate
   y = GLUTwindow_height - y;
+  int sourceAudioState = 0;
 
   // Process keyboard button event 
   switch (key) {
 	  case 'R':
 	  case 'r':
-  		show_rain = !show_rain;
-      if (show_rain) FRICTION_ACCELERATION_MAGNITUDE = 0.1 * ACCELERATION_DUE_TO_GRAVITY;
-      else FRICTION_ACCELERATION_MAGNITUDE = 0.7 * ACCELERATION_DUE_TO_GRAVITY;
-      int sourceAudioState = 0;
-      alGetSourcei(sound_source[0], AL_SOURCE_STATE, &sourceAudioState);
-      if(sourceAudioState != AL_PLAYING)
-        alSourcePlay(sound_source[0]); 
-      else 
-        alSourceStop(sound_source[0]);                                                     
-		break;
+        show_rain = !show_rain;
+        if (show_rain) FRICTION_ACCELERATION_MAGNITUDE = 0.1 * ACCELERATION_DUE_TO_GRAVITY;
+        else FRICTION_ACCELERATION_MAGNITUDE = 0.7 * ACCELERATION_DUE_TO_GRAVITY;
+        alGetSourcei(sound_source[0], AL_SOURCE_STATE, &sourceAudioState);
+        if(sourceAudioState != AL_PLAYING)
+            alSourcePlay(sound_source[0]); 
+        else 
+            alSourceStop(sound_source[0]);                                                     
+	  break;
+      case 'L':
+      case 'l':
+        show_headlight = !show_headlight;
+        break;
   }
 
   // Remember mouse position 

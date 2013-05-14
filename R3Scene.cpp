@@ -225,8 +225,8 @@ Read(const char *filename, R3Node *node)
     return 0;
   }
 
-  // Create array of materials
   vector<R3Material *> materials;
+
 
   // Create default material
   R3Material *default_material = new R3Material();
@@ -505,10 +505,28 @@ Read(const char *filename, R3Node *node)
 
 	
 		bool isTrack = false;
-		if (m == 1 || m == 5)
+		if (m == 1 || m == 5 || m == 8 || m == 9 || m == 10)
 		{
 			isTrack = true;
 		}
+
+    bool isSpeedometer = false;
+    if (m == 8)
+    {
+      isSpeedometer = true;
+    }
+
+    bool isWin = false;
+    if (m == 9)
+    {
+      isWin = true;
+    }
+
+    bool isLose = false;
+    if (m == 10)
+    {
+      isLose = true;
+    }
 		
       // Create box
       R3Box *box = new R3Box(p1, p2);
@@ -530,6 +548,9 @@ Read(const char *filename, R3Node *node)
       node->shape = shape;
       node->bbox = *box;
 		node->isTrack = isTrack;
+    node->isSpeedometer = isSpeedometer;
+    node->isWin = isWin;
+    node->isLose = isLose;
 
       // Insert node
       group_nodes[depth]->bbox.Union(node->bbox);
