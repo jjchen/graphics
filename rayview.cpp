@@ -40,7 +40,7 @@ static char *input_scene_name = NULL;
 static R3Scene *scene = NULL;
 static R3Camera camera;
 static int show_faces = 1;
-static int show_bboxes = 0;
+static int show_bboxes = 1;
 static int show_lights = 0;
 static int show_camera = 0;
 static int save_image = 0;
@@ -593,7 +593,7 @@ void DrawNode(R3Scene *scene, R3Node *node, bool isOverview)
   if (show_bboxes) {
     GLboolean lighting = glIsEnabled(GL_LIGHTING);
     glDisable(GL_LIGHTING);
-    node->bbox.Outline();
+    if (node->isPlayerCarMesh != 1 && node->isTrack != 0) node->bbox.Outline();
     if (lighting) glEnable(GL_LIGHTING);
   }
 }
@@ -750,7 +750,7 @@ void Collision(R3Scene *scene, R3Node *node)
 		{
       collision = 1;
 			// process collisions
-			fprintf(stdout, "collision detected\n");
+			fprintf(stdout, "collision detected %f\n", carSpeed);
 			//update car position
 			playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.2; //may need to change to -=
 			playerCarZPos += -carSpeed * cos(toRads(carAngle)) * 0.2;
@@ -857,7 +857,7 @@ void DrawScene(R3Scene *scene, bool isOverview)
 	//fprintf(stdout,"BoxMin: %f, %f, %f\n", scene->player->bbox.Min().X(), scene->player->bbox.Min().Y(), scene->player->bbox.Min().Z());
 	//fprintf(stdout,"BoxMax: %f, %f, %f\n", scene->player->bbox.Max().X(), scene->player->bbox.Max().Y(), scene->player->bbox.Max().Z());
 	//scene->player->bbox.Transform(r);
-	/*scene->player->bbox.Outline();*/
+	scene->player->bbox.Outline();
 	
 }
 
@@ -1162,7 +1162,7 @@ void drawMiniMapView(void) {
    R3Vector t = -(camera.towards);
 
    //gluLookAt(0,100,0, 0, 99, 0, t[0], 0, t[1]);
-   gluLookAt(0,200,0, 0, 99, 0, 0, 0, 1);
+   gluLookAt(0,3000,0, 0, 99, 0, 0, 0, 1);
    LoadLights(scene);
    glEnable(GL_LIGHTING);
    DrawScene(scene, false);
