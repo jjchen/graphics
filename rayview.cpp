@@ -745,7 +745,7 @@ void Collision(R3Scene *scene, R3Node *node)
 		{
       collision = 1;
 			// process collisions
-			fprintf(stdout, "collision detected\n");
+			//fprintf(stdout, "collision detected\n");
 			//update car position
 			playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.2; //may need to change to -=
 			playerCarZPos += -carSpeed * cos(toRads(carAngle)) * 0.2;
@@ -1279,7 +1279,7 @@ void GLUTRedrawMain(void)
       fprintf(stderr, "about to listen/send\n");
 
       if (is_client) {
-          char* data = "opinions!\n";
+          char* data = "%f %f %f", playerCarXPos, playerCarYPos, playerCarZPos;
           if (client_write(data, socket_desc) == 0) {
               fprintf(stderr, "Successful client send (probably)\n");
           }
