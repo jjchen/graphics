@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
 
 void Update();
 void Collision(R3Scene *scene, R3Node *node);
@@ -141,7 +143,10 @@ using namespace std;
 //Sound
 /////////////////////////////////////////////////////////////
 
-
+void Sound()
+{
+  
+}
 
 /////////////////////////////////////////////////////////////
 // Miscellaneous Functions
