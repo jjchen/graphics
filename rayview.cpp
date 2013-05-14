@@ -15,6 +15,11 @@
 #include <iostream>
 #include "client.h"
 #include "server.h"
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 void Update();
 double toRads(double degrees);
@@ -37,6 +42,7 @@ static int show_lights = 0;
 static int show_camera = 0;
 static int save_image = 0;
 static int quit = 0;
+static int show_rain = 0;
 
 // angle of rotation for the camera direction
 float angle = 0.0f;
@@ -126,6 +132,14 @@ enum {
   QUIT_COMMAND,
 };
 
+using namespace std;
+
+/////////////////////////////////////////////////////////////
+//Sound
+/////////////////////////////////////////////////////////////
+
+
+
 /////////////////////////////////////////////////////////////
 // Miscellaneous Functions
 /////////////////////////////////////////////////////////////
@@ -191,6 +205,7 @@ void DrawShape(R3Shape *shape)
   else if (shape->type == R3_CONE_SHAPE) shape->cone->Draw();
   else if (shape->type == R3_MESH_SHAPE) shape->mesh->Draw();
   else if (shape->type == R3_SEGMENT_SHAPE) shape->segment->Draw();
+  else if (shape->type == R3_CIRCLE_SHAPE) shape->circle->Draw();
   else fprintf(stderr, "Unrecognized shape type: %d\n", shape->type);
 }
 
@@ -684,10 +699,300 @@ void DrawCamera(R3Scene *scene)
   if (lighting) glEnable(GL_LIGHTING);
 }
 
+bool myfn(double i, double j)
+{
+	return i < j;
+}
+
+void Collision(R3Scene *scene, R3Node *node)
+{
+	if (node->children.size() == 0 && node->isPlayerCarMesh == 0 && node->isTrack == 0)
+	{
+		double car_minx = scene->player->bbox.XMin();
+		double car_maxx = scene->player->bbox.XMax();
+		double car_minz = scene->player->bbox.ZMin();
+		double car_maxz = scene->player->bbox.ZMax();
+		double obj_minx = node->bbox.XMin();
+		double obj_maxx = node->bbox.XMax();
+		double obj_minz = node->bbox.ZMin();
+		double obj_maxz = node->bbox.ZMax();
+		int intersect = 1;
+		double error = 0;
+		if (car_maxx < obj_minx + error)
+		{
+			intersect = 0;
+		}
+		if (car_minx > obj_maxx + error)
+		{
+			intersect = 0;
+		}
+		if (car_maxz < obj_minz + error)
+		{
+			intersect = 0;
+		}
+		if (car_minz > obj_maxz + error)
+		{
+			intersect = 0;
+		}
+		
+		if (intersect == 1)
+		{
+			// process collisions
+			//fprintf(stdout, "collision detected\n");
+			//update car position
+			playerCarXPos -= carSpeed * sin(toRads(carAngle)) * 0.1; //may need to change to -=
+			playerCarZPos -= carSpeed * cos(toRads(carAngle)) * 0.1;
+			
+			//Update car speed
+			carSpeed = carSpeed - carAcceleration*0.1;
+			if (carSpeed < 0.0)
+			{
+				carSpeed = 0.0;
+			}
+		}
+	}
+	// Draw children nodes
+	for (int i = 0; i < (int) node->children.size(); i++) 
+		Collision(scene, node->children[i]);
+}
+
 void DrawScene(R3Scene *scene, bool isOverview) 
 {
+	// Check for collisions
+	Collision(scene, scene->root);
+	
   // Draw nodes recursively
   DrawNode(scene, scene->root, isOverview);
+	
+	R3Matrix r = R3Matrix(1.0, 0.0, 0.0, 0.0, 
+						  0.0, 1.0, 0.0, 0.0,
+						  0.0, 0.0, 1.0, 0.0, 
+						  0.0, 0.0, 0.0, 1.0);
+	r.Translate(R3Vector(playerCarXPos, playerCarYPos, playerCarZPos));
+	//r.Rotate(R3Vector(0.0, 1.0, 0.0), carAngle);
+	//fprintf(stdout,"Box Center: %f, %f, %f\n", scene->player->bbox.XCenter(),scene->player->bbox.YCenter(),scene->player->bbox.ZCenter());
+	//fprintf(stdout,"Translate: %f, %f, %f\n", playerCarXPos, playerCarYPos, playerCarZPos);
+	//fprintf(stdout,"Rotate: %f\n", carAngle);
+	scene->player->bbox = scene->originalbbox;
+	scene->player->bbox.Transform(r);
+	
+	R3Box b = scene->player->bbox;
+	double miny = b.YMin();
+	double maxy = b.YMax();
+	double minx = b.XMin();
+	double minz = b.ZMin();
+	double maxx = b.XMax();
+	double maxz = b.ZMax();
+	double cx = b.XCenter();
+	double cz = b.ZCenter();
+	double height = maxz - minz;
+	double width = maxx - minx;
+	double A = carAngle*3.141592/180;
+	double ULx = cx+width/2*cos(A)-height/2*sin(A);
+	double URx = cx-width/2*cos(A)-(height/2)*sin(A);
+	double BLx = cx+width/2*cos(A)+height/2*sin(A);
+	double BRx = cx-width/2*cos(A)+height/2*sin(A);
+	double ULz = cz+height/2*cos(A) + width/2*sin(A);
+	double URz = cz+height/2*cos(A)-width/2*sin(A);
+	double BLz = cz-height/2*cos(A)+width/2*sin(A);
+	double BRz = cz-height/2*cos(A)-width/2*sin(A);
+	vector<double> x_values;
+	vector<double> z_values;
+	x_values.push_back(ULx);
+	x_values.push_back(URx);
+	x_values.push_back(BLx);
+	x_values.push_back(BRx);
+	z_values.push_back(ULz);
+	z_values.push_back(URz);
+	z_values.push_back(BLz);
+	z_values.push_back(BRz);
+	minx = *std::min_element(x_values.begin(),x_values.end(),myfn);
+	minz = *std::min_element(z_values.begin(),z_values.end(),myfn);
+	maxx = *std::max_element(x_values.begin(),x_values.end(),myfn);
+	maxz = *std::max_element(z_values.begin(),z_values.end(),myfn);
+	scene->player->bbox.Reset(R3Point(minx,miny,minz), R3Point(maxx,maxy,maxz));
+	
+	// check all four points of rectangle
+	/*double x0 = b.XCenter();
+	 double z0 = b.ZCenter();
+	 double x1 = x0 + (b.XMin()-x0)*cos(carAngle)+(b.ZMin()-z0)*sin(carAngle);
+	 double z1 = z0 - (b.XMin()-x0)*sin(carAngle)+(b.ZMin()-z0)*cos(carAngle);
+	 double x2 = x0 + (b.XMax()-x0)*cos(carAngle)+(b.ZMax()-z0)*sin(carAngle);
+	 double z2 = z0 - (b.XMax()-x0)*sin(carAngle)+(b.ZMax()-z0)*cos(carAngle);
+	 double minx;
+	 double minz;
+	 double maxx;
+	 double maxz;
+	 double miny = b.YMin();
+	 double maxy = b.YMax();
+	 if (x1 < x2)
+	 {
+	 minx = x1;
+	 maxx = x2;
+	 }
+	 else {
+	 minx = x2;
+	 maxx = x1;
+	 }
+	 if (z1 < x2)
+	 {
+	 minz = z1;
+	 maxz = z2;
+	 }
+	 else {
+	 minz = z2;
+	 maxz = z1;
+	 }
+	 scene->player->bbox.Reset(R3Point(minx,miny,minz), R3Point(maxx,maxy,maxz));*/
+	
+	//fprintf(stdout,"BoxMin: %f, %f, %f\n", scene->player->bbox.Min().X(), scene->player->bbox.Min().Y(), scene->player->bbox.Min().Z());
+	//fprintf(stdout,"BoxMax: %f, %f, %f\n", scene->player->bbox.Max().X(), scene->player->bbox.Max().Y(), scene->player->bbox.Max().Z());
+	//scene->player->bbox.Transform(r);
+	/*scene->player->bbox.Outline();*/
+	
+}
+
+void GenerateParticles(R3Scene *scene, double current_time, double delta_time)
+{
+	for (int i = 0; i < scene->NParticleSources(); i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			R3Particle *particle = new R3Particle();
+			double z = (rand() % 2001 - 1000.0)/1000.0*scene->ParticleSource(i)->shape->sphere->Radius();
+			double phi = (rand() % 1001)/1000.0*2*3.1415927;
+			double d = sqrt(scene->ParticleSource(i)->shape->sphere->Radius()*scene->ParticleSource(i)->shape->sphere->Radius() - z*z);
+			//double px = scene->ParticleSource(i)->shape->sphere->Center().X() + d*cos(phi);
+			//double py = scene->ParticleSource(i)->shape->sphere->Center().Y() + d*sin(phi);
+			//double pz = scene->ParticleSource(i)->shape->sphere->Center().Z() + z;
+			double px = scene->player->bbox.Centroid().X() + d*cos(phi);
+			double py = (scene->player->bbox.Centroid().Y() + 40) + d*sin(phi);
+			double pz = scene->player->bbox.Centroid().Z() + z;
+			particle->position = R3Point(px,py,pz);
+			particle->material = scene->ParticleSource(i)->material;
+			//R3Vector N = particle->position - scene->ParticleSource(i)->shape->sphere->Center();
+			R3Vector N = particle->position - scene->player->bbox.Centroid();
+			N.Normalize();
+			double x_tangent = N.X();
+			double y_tangent = N.Y();
+			double z_tangent = -(N.X()*N.X() + N.Y()*N.Y())/N.Z();
+			R3Vector A = R3Vector(x_tangent, y_tangent, z_tangent);
+			A.Normalize();
+			double t1 = (rand() % 1001)/1000.0*2*3.1415927;
+			double t2 = (rand() % 1001)/1000.0*sin(scene->ParticleSource(i)->angle_cutoff);
+			R3Vector V = A;
+			V.Rotate(N,t1);
+			R3Vector *VxN = new R3Vector(V);
+			VxN->Cross(N);
+			V.Rotate(*VxN,acos(t2));
+			V.Normalize();
+			V = V*scene->ParticleSource(i)->velocity;
+			particle->velocity = V;
+			delete VxN;
+			particle->drag = scene->ParticleSource(i)->drag;
+			particle->mass = scene->ParticleSource(i)->mass;
+			particle->lifetime = scene->ParticleSource(i)->lifetime;
+			particle->timeborn = current_time;
+			scene->particles.push_back(particle);
+		}
+	}
+}
+
+void UpdateParticles(R3Scene *scene, double current_time, double delta_time)
+{
+	for (int i = 0; i < scene->NParticles(); i++)
+	{
+		scene->gravity = R3Vector(0, -9.80665, 0);
+		R3Vector fg = scene->Particle(i)->mass*scene->gravity;
+		R3Vector fd = -scene->Particle(i)->drag*scene->Particle(i)->velocity;
+		
+		scene->Particle(i)->position += delta_time*scene->Particle(i)->velocity*0.5;
+		scene->Particle(i)->velocity += delta_time*(fg+fd)/scene->Particle(i)->mass;
+		
+		if (scene->Particle(i)->timeborn < -1e60)
+		{
+			scene->Particle(i)->timeborn = 0.0;
+		}
+		if (current_time - scene->Particle(i)->timeborn > scene->Particle(i)->lifetime + 1e-6)
+		{
+			scene->particles.erase(scene->particles.begin() + i);
+			i--;
+		}
+	}
+}
+
+void DrawParticles(R3Scene *scene)
+{
+	// Get current time (in seconds) since start of execution
+	double current_time = GetTime();
+	static double previous_time = 0;
+	
+	// program just started up?
+	if (previous_time == 0) previous_time = current_time;
+	
+	// time passed since starting
+	double delta_time = current_time - previous_time;
+	
+	// Update particles
+	UpdateParticles(scene, current_time, delta_time);
+	
+	// Generate new particles
+	if (show_rain) GenerateParticles(scene, current_time, delta_time);
+	
+	// Render particles
+	//if (show_particles) RenderParticles(scene, current_time - time_lost_taking_videos, delta_time);
+	glDisable(GL_LIGHTING);
+	glPointSize(1);
+	glColor3d(0.5, 0.5, 0.5);
+	glBegin(GL_LINES);
+	for (int i = 0; i < scene->NParticles(); i++) {
+		R3Particle *particle = scene->Particle(i);
+		glColor3d(particle->material->kd[0], particle->material->kd[1], particle->material->kd[2]);
+		const R3Point& position = particle->position;
+		glVertex3d(position[0], position[1], position[2]);
+		glVertex3d(position[0]+0.05, position[1]+0.35, position[2]);
+	}   
+	glEnd();
+	
+	// Remember previous time
+	previous_time = current_time;
+}
+
+
+void DrawParticleSources(R3Scene *scene)
+{
+	// Check if should draw particle sources
+	//if (!show_particle_sources_and_sinks) return;
+	
+	// Setup
+	GLboolean lighting = glIsEnabled(GL_LIGHTING);
+	glEnable(GL_LIGHTING);
+	
+	// Define source material
+	static R3Material source_material;
+	if (source_material.id != 33) {
+		source_material.ka.Reset(0.2,0.2,0.2,1);
+		source_material.kd.Reset(0,1,0,1);
+		source_material.ks.Reset(0,1,0,1);
+		source_material.kt.Reset(0,0,0,1);
+		source_material.emission.Reset(0,0,0,1);
+		source_material.shininess = 1;
+		source_material.indexofrefraction = 1;
+		source_material.texture = NULL;
+		source_material.texture_index = -1;
+		source_material.id = 33;
+	}
+	
+	// Draw all particle sources
+	glEnable(GL_LIGHTING);
+	LoadMaterial(&source_material);
+	for (int i = 0; i < scene->NParticleSources(); i++) {
+		R3ParticleSource *source = scene->ParticleSource(i);
+		DrawShape(source->shape);
+	}
+	
+	// Clean up
+	if (!lighting) glDisable(GL_LIGHTING);
 }
 
 ////////////////////////////////////////////////////////////
@@ -941,6 +1246,12 @@ void GLUTRedrawMain(void)
 
   // Load scene lights
   LoadLights(scene);
+	
+	// Draw particles
+	DrawParticles(scene);
+	
+	// Draw particle sources 
+	//DrawParticleSources(scene);
 
   LoadHeadLight();
 
@@ -1097,8 +1408,13 @@ void GLUTSpecialUp(int key, int x, int y)
     break;
   case GLUT_KEY_RIGHT:
     rightPressActive = false;
-  break;
-  }
+
+	break;
+  case 'R':
+  case 'r':
+	show_rain = !show_rain;
+    break;
+}
 
   // Remember mouse position 
   GLUTmouse[0] = x;

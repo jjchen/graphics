@@ -13,6 +13,7 @@ typedef enum {
   R3_CONE_SHAPE,
   R3_MESH_SHAPE,
   R3_SEGMENT_SHAPE,
+  R3_CIRCLE_SHAPE,
   R3_NUM_SHAPE_TYPES
 } R3ShapeType;
 
@@ -36,6 +37,7 @@ struct R3Shape {
   R3Cone *cone;
   R3Mesh *mesh;
   R3Segment *segment;
+  R3Circle *circle;
 };  
 
 struct R3Material {
@@ -84,7 +86,56 @@ struct R3Node {
   // Changing this. -1 means it's not a car.
   // 0 and onwards indicates the position in the car array.
   int isPlayerCarMesh;
+	
+	int isTrack;
 };
+
+
+
+// Particle system definitions
+
+struct R3Particle {
+  R3Point position;
+  R3Vector velocity;
+  double mass;
+  bool fixed;
+  double drag;
+  double elasticity;
+  double lifetime;
+  double timeborn;
+  R3Material *material;
+  vector<struct R3ParticleSpring *> springs;
+};
+
+struct R3ParticleSource {
+  R3Shape *shape;
+  double rate;
+  double velocity;
+  double angle_cutoff;
+  double mass;
+  bool fixed;
+  double drag;
+  double elasticity;
+  double lifetime;
+  R3Material *material;
+};
+
+struct R3ParticleSink {
+  R3Shape *shape;
+  double intensity;
+  double constant_attenuation;
+  double linear_attenuation;
+  double quadratic_attenuation;
+};
+
+struct R3ParticleSpring {
+  R3Particle *particles[2];
+  double rest_length;
+  double ks;
+  double kd;
+};
+
+
 
 // Scene graph definition
 struct R3Scene {
@@ -99,16 +150,31 @@ struct R3Scene {
   R3Camera& Camera(void);
   R3Box& BBox(void);
 
+    // Particle stuff
+  int NParticleSources(void) const;
+  R3ParticleSource *ParticleSource(int k) const;
+  int NParticleSinks(void) const;
+  R3ParticleSink *ParticleSink(int k) const;
+  int NParticles(void) const;
+  R3Particle *Particle(int k) const;
+
   // I/O functions
   int Read(const char *filename, R3Node *root = NULL);
 
  public:
   R3Node *root;
+  vector<R3Particle *> particles;
+  vector<R3ParticleSource *> particle_sources;
+  vector<R3ParticleSink *> particle_sinks;
+  vector<R3ParticleSpring *> particle_springs;
   vector<R3Light *> lights;
+  R3Vector gravity;
   R3Camera camera;
   R3Box bbox;
   R3Rgb background;
   R3Rgb ambient;
+  R3Mesh *player;
+  R3Box originalbbox;
 };
 
 
@@ -159,4 +225,54 @@ BBox(void)
 }
 
 
+inline int R3Scene::
+NParticleSources(void) const
+{
+  // Return number of particle sources
+  return particle_sources.size();
+}
 
+
+
+inline R3ParticleSource *R3Scene::
+ParticleSource(int k) const
+{
+  // Return kth particle source
+  return particle_sources[k];
+}
+
+
+
+inline int R3Scene::
+NParticleSinks(void) const
+{
+  // Return number of particle sinks
+  return particle_sinks.size();
+}
+
+
+
+inline R3ParticleSink *R3Scene::
+ParticleSink(int k) const
+{
+  // Return kth particle sink
+  return particle_sinks[k];
+}
+
+
+
+inline int R3Scene::
+NParticles(void) const
+{
+  // Return number of particles
+  return particles.size();
+}
+
+
+
+inline R3Particle *R3Scene::
+Particle(int k) const
+{
+  // Return kth particle 
+  return particles[k];
+}
