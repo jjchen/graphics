@@ -76,7 +76,7 @@ static int GLUTmodifiers = 0;
 
 //gameplay variables
 // Player car
-static double playerCarXPos = 0.0;
+static double playerCarXPos = 9.0;
 static double playerCarYPos = 0.0;
 static double playerCarZPos = 0.0;
 
@@ -107,11 +107,11 @@ enum {
 };
 
 static int currentView = THIRD_PERSON_VIEW;
-static double camYPos = 25;
+static double camYPos = 50;
 static double camZDistance = camYPos;
 
 //gameplay physics variables
-static double carAngle = 0.0;
+static double carAngle = 60.0;
 static double carSpeed = 0.0;
 static double carAcceleration = 0.0;
 double MAX_SPEED = 60;
@@ -449,7 +449,6 @@ void LoadCamera(R3Camera *camera)
   glLoadIdentity();
   glMultMatrixd(camera_matrix);
   glTranslated(-(camera->eye[0]), -(camera->eye[1]), -(camera->eye[2]));
-  //glRotatef(-1.0 * carAngle * 1000.0 / (R3Distance(camera->eye, R3Point(playerCarXPos, playerCarYPos, playerCarZPos))) , 0.0, 1.0, 0.0);
 }
 
 void LoadLights(R3Scene *scene)
