@@ -20,8 +20,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
-// #include <OpenAL/al.h>
-// #include <OpenAL/alc.h>
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
 
 void Update();
 void Collision(R3Scene *scene, R3Node *node);
@@ -46,6 +46,9 @@ static int show_camera = 0;
 static int save_image = 0;
 static int quit = 0;
 static bool show_rain = false;
+static int first = 1;
+
+static double maxtime = 360;
 
 // angle of rotation for the camera direction
 float angle = 0.0f;
@@ -122,13 +125,18 @@ static double FORWARD_AND_REVERSE_ACCELRATION_MAGNITUDE = 12.0;
 static double ANGLE_TURN_RATIO = 0.1;
 char time_str[50];
 char speed_str[50];
+char timeleft_str[50];
 char lap_str[50];
 int lap = 1;
+double lapStartTime = 0;
+double timeleft = 360;
+int show_end = 0;
+
+ALuint sound_source[2];   
+ALuint sound_buffer[2];                                                            
 
 
-//ALuint sound_source[2];   
-//ALuint sound_buffer[2];                                                            
-
+double timeToBeat = 320;
 // GLUT command list
 
 enum {
@@ -159,9 +167,9 @@ int endWithError(char* msg, int error=0)
 
 int LoadWav()
 {  
- /*   //Loading of the WAVE file
+    //Loading of the WAVE file
     FILE *fp = NULL;   
-    FiLE *fp2 = NULL                                                         //Create FILE pointer for the WAVE file
+    FILE *fp2 = NULL;                                                         //Create FILE pointer for the WAVE file
     fp=fopen("rain-04.wav","rb");                                            //Open the WAVE file
     if (!fp) return endWithError("Failed to open file");                        //Could not open file
     
@@ -204,22 +212,11 @@ int LoadWav()
     return endWithError("Missing DATA");                                        //not data
     
     fread(&dataSize,sizeof(DWORD),1,fp);                                        //The size of the sound data is read
-    */
-    //Display the info about the WAVE file
-    /*cout << "Chunk Size: " << chunkSize << "\n";
-    cout << "Format Type: " << formatType << "\n";
-    cout << "Channels: " << channels << "\n";
-    cout << "Sample Rate: " << sampleRate << "\n";
-    cout << "Average Bytes Per Second: " << avgBytesPerSec << "\n";
-    cout << "Bytes Per Sample: " << bytesPerSample << "\n";
-    cout << "Bits Per Sample: " << bitsPerSample << "\n";
-    cout << "Data Size: " << dataSize << "\n";*/
-        
-/*    unsigned char* buf= new unsigned char[dataSize];                            //Allocate memory for the sound data
-    //cout << fread(buf,sizeof(BYTE),dataSize,fp) << " bytes loaded\n";           //Read the sound data and display the 
+    
+    unsigned char* buf= new unsigned char[dataSize];                            //Allocate memory for the sound data
                                                                                 //number of bytes loaded.
                                                                                 //Should be the same as the Data Size if OK
-   fread(buf,sizeof(char),dataSize,fp);
+    fread(buf,sizeof(char),dataSize,fp);
     
 
     //Now OpenAL needs to be initialized 
@@ -260,7 +257,67 @@ int LoadWav()
     alBufferData(sound_buffer[0], format, buf, dataSize, frequency);                    //Store the sound data in the OpenAL Buffer
     if(alGetError() != AL_NO_ERROR) 
     return endWithError("Error loading ALBuffer");                              //Error during buffer loading
+
+
+
+    //Check that the WAVE file is OK
+    fread(type,sizeof(char),4,fp2);                                              //Reads the first bytes in the file
+    if(type[0]!='R' || type[1]!='I' || type[2]!='F' || type[3]!='F')            //Should be "RIFF"
+    return endWithError ("No RIFF");                                            //Not RIFF
+
+    fread(&size, sizeof(DWORD),1,fp2);                                           //Continue to read the file
+    fread(type, sizeof(char),4,fp2);                                             //Continue to read the file
+    if (type[0]!='W' || type[1]!='A' || type[2]!='V' || type[3]!='E')           //This part should be "WAVE"
+    return endWithError("not WAVE");                                            //Not WAVE
+    
+    fread(type,sizeof(char),4,fp2);                                              //Continue to read the file
+    if (type[0]!='f' || type[1]!='m' || type[2]!='t' || type[3]!=' ')           //This part should be "fmt "
+    return endWithError("not fmt ");                                            //Not fmt 
+    
+    //Info about the WAVE data is now read and stored
+    fread(&chunkSize,sizeof(DWORD),1,fp2);
+    fread(&formatType,sizeof(short),1,fp2);
+    fread(&channels,sizeof(short),1,fp2);
+    fread(&sampleRate,sizeof(DWORD),1,fp2);
+    fread(&avgBytesPerSec,sizeof(DWORD),1,fp2);
+    fread(&bytesPerSample,sizeof(short),1,fp2);
+    fread(&bitsPerSample,sizeof(short),1,fp2);
+    
+    fread(type,sizeof(char),4,fp2);
+    if (type[0]!='d' || type[1]!='a' || type[2]!='t' || type[3]!='a')           //This part should be "data"
+    return endWithError("Missing DATA");                                        //not data
+    
+    fread(&dataSize,sizeof(DWORD),1,fp2);                                        //The size of the sound data is read
+    
+    buf= new unsigned char[dataSize];                            //Allocate memory for the sound data
+                                                                                //number of bytes loaded.
+                                                                                //Should be the same as the Data Size if OK
+    fread(buf,sizeof(char),dataSize,fp2);
+
   
+    //Figure out the format of the WAVE file
+    if(bitsPerSample == 8)
+    {
+        if(channels == 1)
+            format = AL_FORMAT_MONO8;
+        else if(channels == 2)
+            format = AL_FORMAT_STEREO8;
+    }
+    else if(bitsPerSample == 16)
+    {
+        if(channels == 1)
+            format = AL_FORMAT_MONO16;
+        else if(channels == 2)
+            format = AL_FORMAT_STEREO16;
+    }
+    if(!format) return endWithError("Wrong BitPerSample");                      //Not valid format
+
+
+
+    alBufferData(sound_buffer[1], format, buf, dataSize, frequency);                    //Store the sound data in the OpenAL Buffer
+    if(alGetError() != AL_NO_ERROR) 
+    return endWithError("Error loading ALBuffer");                              //Error during buffer loading
+
     //Sound setting variables
     ALfloat SourcePos[] = { 0.0, 0.0, 0.0 };                                    //Position of the source sound
     ALfloat SourceVel[] = { 0.0, 0.0, 0.0 };                                    //Velocity of the source sound
@@ -280,9 +337,17 @@ int LoadWav()
     alSourcefv(sound_source[0], AL_POSITION, SourcePos);                                 //Set the position of the source
     alSourcefv(sound_source[0], AL_VELOCITY, SourceVel);                                 //Set the velocity of the source
     alSourcei (sound_source[0], AL_LOOPING,  AL_TRUE );                                  //Set if source is looping sound
-    
-    //system("PAUSE");                                                            //Pause to let the sound play   
-    */                                                   
+
+
+    //Source
+    alSourcei (sound_source[1], AL_BUFFER,   sound_buffer[1]);                                    //Link the buffer to the source
+    alSourcef (sound_source[1], AL_PITCH,    0.5f     );                                 //Set the pitch of the source
+    alSourcef (sound_source[1], AL_GAIN,     1.0f     );                                 //Set the gain of the source
+    alSourcefv(sound_source[1], AL_POSITION, SourcePos);                                 //Set the position of the source
+    alSourcefv(sound_source[1], AL_VELOCITY, SourceVel);                                 //Set the velocity of the source
+    alSourcei (sound_source[1], AL_LOOPING,  AL_FALSE );                                  //Set if source is looping sound
+        
+    //system("PAUSE");                                                            //Pause to let the sound play                                                      
 }
 
 
@@ -297,7 +362,6 @@ static double GetTime(void)
 {
 #ifdef _WIN32
   // Return number of seconds since start of execution
-  static int first = 1;
   static LARGE_INTEGER timefreq;
   static LARGE_INTEGER start_timevalue;
 
@@ -319,7 +383,6 @@ static double GetTime(void)
   }
 #else
   // Return number of seconds since start of execution
-  static int first = 1;
   static struct timeval start_timevalue;
 
   // Check if this is the first time
@@ -710,9 +773,17 @@ void DrawNode(R3Scene *scene, R3Node *node, bool isOverview)
 
   // Draw shape
   if (node->shape && !(node->isPlayerCarMesh && isOverview)) DrawShape(node->shape);
-  else {
 
+  if (node->isPlayerCarMesh && isOverview) {
+    glPushMatrix();
+    glTranslated(10, 100, -50);
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glutSolidSphere(10, 50, 50);
+    glEnable(GL_LIGHTING);
+    glPopMatrix();
   }
+
   //if car, reload identity matrix
   if (node->isPlayerCarMesh) 
   {
@@ -722,7 +793,8 @@ void DrawNode(R3Scene *scene, R3Node *node, bool isOverview)
     0.0, 0.0, 0.0, 1.0);
     LoadMatrix(&r);
    }
-  
+
+
   // Draw children nodes
   for (int i = 0; i < (int) node->children.size(); i++) 
     DrawNode(scene, node->children[i], isOverview);
@@ -875,12 +947,12 @@ void Collision(R3Scene *scene, R3Node *node)
     node->shape->box->Transform(node->parent->transformation.Inverse());
 
     int intersect = 1;
-    double error = 0;
+    double error = 1.5;
     if (car_maxx < obj_minx + error)
     {
       intersect = 0;
     }
-    if (car_minx > obj_maxx + error)
+    if (car_minx > obj_maxx - error)
     {
       intersect = 0;
     }
@@ -888,7 +960,7 @@ void Collision(R3Scene *scene, R3Node *node)
     {
       intersect = 0;
     }
-    if (car_minz > obj_maxz + error)
+    if (car_minz > obj_maxz - error)
     {
       intersect = 0;
     }
@@ -1226,18 +1298,17 @@ void drawHUD(void)
     glColor3d(1.0f, 1.0f, 1.0f);
     
     double curtime = GetTime();
-    static double prevtime = 0;
-    if (prevtime == 0) prevtime = curtime;
     sprintf(time_str, "Time: %4.1f", curtime);
-    prevtime = curtime;
+    timeleft = maxtime - curtime;
+    sprintf(timeleft_str, "Time Left: %4.1f", timeleft);
 
     double mph = abs(carSpeed) * 2.23694;
-    sprintf(speed_str, "Speed: %2.0f mph", mph);
+    sprintf(speed_str, "%2.0f mph", mph);
 
     sprintf(lap_str, "Lap: %d of 3", lap);
 
     GLUTPrint(400,75, time_str);
-    GLUTPrint(50,400,"Position: 2nd out of 10");
+    GLUTPrint(400,100, timeleft_str);
     GLUTPrint(50,450, speed_str);
     GLUTPrint(385,360,"Track");
     GLUTPrint(400,50, lap_str);
@@ -1308,10 +1379,10 @@ void drawMiniMapView(void) {
    R3Vector t = -(camera.towards);
 
    //gluLookAt(0,100,0, 0, 99, 0, t[0], 0, t[1]);
-   gluLookAt(0,400,0, 0, 99, 0, 0, 0, 1);
+   gluLookAt(0,1500,0, 150, 99, 200, 0, 0, 1);
    LoadLights(scene);
    glEnable(GL_LIGHTING);
-   DrawScene(scene, false);
+   DrawScene(scene, true);
 }
 
 void drawRearViewMirror(void) {
@@ -1344,7 +1415,7 @@ void LoadHeadLight(void) {
   GLfloat lightbuffer[4];
 
   glDisable(GL_LIGHT5);
-  GLfloat headlight_diffuse[] = { 1.0, 1.0, 1.0, 1.0 };
+  GLfloat headlight_diffuse[] = { 0.0, 1.0, 1.0, 1.0 };
   GLfloat headlight_specular[] = { 1.0, 1.0, 1.0, 1.0 };
 
   glLightfv(GL_LIGHT5, GL_DIFFUSE, headlight_diffuse);
@@ -1356,29 +1427,97 @@ void LoadHeadLight(void) {
 
   // Load spot light behavior
 
-  glLightf(GL_LIGHT5, GL_SPOT_CUTOFF, 1);
+  glLightf(GL_LIGHT5, GL_SPOT_CUTOFF, 100);
   glLightf(GL_LIGHT5, GL_SPOT_EXPONENT, 1);
 
-  lightbuffer[0] = 0;
-  lightbuffer[1] = 0;
-  lightbuffer[2] = 0;
+  lightbuffer[0] = playerCarXPos;
+  lightbuffer[1] = playerCarYPos;
+  lightbuffer[2] = playerCarZPos;
   lightbuffer[3] = 1.0;
 
   glLightfv(GL_LIGHT5, GL_POSITION, lightbuffer);
 
-  lightbuffer[0] = 0;
+  lightbuffer[0] = -sin(carAngle);
   lightbuffer[1] = 0;
-  lightbuffer[2] = 0;
+  lightbuffer[2] = cos(carAngle);
   lightbuffer[3] = 1.0;  
   glLightfv(GL_LIGHT5, GL_SPOT_DIRECTION, lightbuffer);
 
   glEnable(GL_LIGHT5);
 }
 
+
+void drawEnd(char* message)
+{
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   glViewport(0, 0, GLUTwindow_width, GLUTwindow_height);
+   gluPerspective(45, (GLUTwindow_width)/GLUTwindow_height, 1, 2000);
+   glMatrixMode(GL_MODELVIEW);
+
+   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+   glPushMatrix();
+   glTranslatef (0.0, 0.0, -5.0);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, 500, 500, 0.0, -1.0, 10.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glDisable(GL_LIGHTING); 
+    glColor3f(0.0f, 0.0f, 1.0f);
+    GLUTPrint(220, 375, "Replay");
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    GLUTPrint(225, 225, message);
+    glBegin(GL_QUADS);
+        glVertex2f(200, 350); // vertex 1
+        glVertex2f(200, 400); // vertex 2
+        glVertex2f(300, 400); // vertex 3
+        glVertex2f(300, 350); // vertex 4
+    glEnd();
+
+    glEnable(GL_LIGHTING); 
+    
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);  
+    glPopMatrix ();
+    glFlush(); 
+    glutSwapBuffers();
+}
+
 void GLUTRedrawMain(void)
 {
+  if (timeleft <= 0) {
+    show_end = 1;
+    carSpeed = 0;
+    carAcceleration = 0;
+    drawEnd("LOSE!");
+    return;
+  }
+  double curtime = GetTime();
+  if (lapStartTime == 0) {
+    lapStartTime = GetTime();
+  }
+  if ((curtime-lapStartTime > 40) && (playerCarXPos <= 9.5 && playerCarXPos >= 8.5) && (playerCarZPos <= 0.0 && playerCarZPos >= -20)) {
+    if (lap == 1) {
+      show_end = 1;
+      carSpeed = 0;
+      carAcceleration = 0;
+      drawEnd("WIN!");
+      return;
+    }
+    lapStartTime = GetTime();
+    lap++;
+  }
   Collision(scene, scene->root);
   Update();
+  if (collision == 1) {
+      alSourcePlay(sound_source[1]); 
+  }
   collision = 0;
 
   glutSetWindow(GLUTwindow);
@@ -1572,14 +1711,16 @@ void GLUTKeyboard(unsigned char key, int x, int y)
   switch (key) {
 	  case 'R':
 	  case 'r':
-		show_rain = !show_rain;
-   // int sourceAudioState = 0;
-   // alGetSourcei(sound_source[0], AL_SOURCE_STATE, &sourceAudioState);
-   // if(sourceAudioState != AL_PLAYING)
-   //   alSourcePlay(sound_source[0]); 
-   // else 
-   //   alSourceStop(sound_source[0]);                                                     
-	//	break;
+  		show_rain = !show_rain;
+      if (show_rain) FRICTION_ACCELERATION_MAGNITUDE = 0.1 * ACCELERATION_DUE_TO_GRAVITY;
+      else FRICTION_ACCELERATION_MAGNITUDE = 0.7 * ACCELERATION_DUE_TO_GRAVITY;
+      int sourceAudioState = 0;
+      alGetSourcei(sound_source[0], AL_SOURCE_STATE, &sourceAudioState);
+      if(sourceAudioState != AL_PLAYING)
+        alSourcePlay(sound_source[0]); 
+      else 
+        alSourceStop(sound_source[0]);                                                     
+		break;
   }
 
   // Remember mouse position 
@@ -1635,6 +1776,27 @@ void GLUTIdle(void)
   glutPostRedisplay();
 }
 
+void mouse(int button, int state, int x, int y)
+{
+   switch (button) {
+      case GLUT_LEFT_BUTTON:
+         if (show_end == 1 && x < 300 && x > 200 && y < 400 && y > 350) {
+          show_end = 0;
+          lap = 1;
+          first = 1;
+          timeleft = maxtime;
+          playerCarXPos = 9.0;
+          playerCarYPos = 0.0;
+          playerCarZPos = -5.0;
+          carAngle = 90.0;
+          lapStartTime = GetTime();
+          break;
+         } 
+      default:
+         break;
+   }
+}
+
 void GLUTInit(int *argc, char **argv)
 {
   // Open window 
@@ -1651,6 +1813,7 @@ void GLUTInit(int *argc, char **argv)
   glutKeyboardFunc(GLUTKeyboard);
   glutSpecialFunc(GLUTSpecial);
   glutSpecialUpFunc(GLUTSpecialUp);
+  glutMouseFunc(mouse);
   glutMotionFunc(GLUTMotion);
 
   // Initialize graphics modes 
