@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 void Update();
+void Collision(R3Scene *scene, R3Node *node);
 double toRads(double degrees);
 
 ////////////////////////////////////////////////////////////
@@ -58,6 +59,8 @@ float x=0.0f, z=5.0f, y = 1.75f;
 float deltaAngle = 0.0f;
 float deltaMove = 0;
 int xOrigin = -1;
+
+static int collision;
 
 // GLUT variables 
 
@@ -381,16 +384,19 @@ void Update()
   {
     carAcceleration = (carSpeed >= 0.0) ? -1.0 * FRICTION_ACCELERATION_MAGNITUDE : FRICTION_ACCELERATION_MAGNITUDE;
   }
-  
-  if (leftPressActive)
-  {
-    carAngle += ANGLE_TURN_RATIO * carSpeed;
-    carAngle = fmod(carAngle, 360);
-  }
-  else if (rightPressActive)
-  {
-    carAngle -= ANGLE_TURN_RATIO * carSpeed;
-    carAngle = fmod(carAngle, 360);
+  Collision(scene, scene->root);
+
+  if (collision == 0) {
+    if (leftPressActive)
+    {
+      carAngle += ANGLE_TURN_RATIO * carSpeed;
+      carAngle = fmod(carAngle, 360);
+    }
+    else if (rightPressActive)
+    {
+      carAngle -= ANGLE_TURN_RATIO * carSpeed;
+      carAngle = fmod(carAngle, 360);
+    }
   }
   
   // update previous time
@@ -706,6 +712,7 @@ bool myfn(double i, double j)
 
 void Collision(R3Scene *scene, R3Node *node)
 {
+  collision = 0;
 	if (node->children.size() == 0 && node->isPlayerCarMesh == 0 && node->isTrack == 0)
 	{
 		double car_minx = scene->player->bbox.XMin();
@@ -737,14 +744,16 @@ void Collision(R3Scene *scene, R3Node *node)
 		
 		if (intersect == 1)
 		{
+      collision = 1;
 			// process collisions
-			//fprintf(stdout, "collision detected\n");
+			fprintf(stdout, "collision detected\n");
 			//update car position
-			playerCarXPos -= carSpeed * sin(toRads(carAngle)) * 0.1; //may need to change to -=
-			playerCarZPos -= carSpeed * cos(toRads(carAngle)) * 0.1;
+			playerCarXPos += -carSpeed * sin(toRads(carAngle)) * 0.2; //may need to change to -=
+			playerCarZPos += -carSpeed * cos(toRads(carAngle)) * 0.2;
 			
 			//Update car speed
-			carSpeed = 0;
+			carSpeed = carSpeed * -0.1;
+    //  carAcceleration = -1*carAcceleration;
 		}
 	}
 	// Draw children nodes
@@ -1429,11 +1438,6 @@ void GLUTSpecialUp(int key, int x, int y)
 	  case GLUT_KEY_RIGHT:
 		rightPressActive = false;
 		break;
-  }
-
-  if (key == GLUT_KEY_RIGHT) {
-		fprintf(stderr, "stuff\n");
-		show_rain = !show_rain;
   }
 
   // Remember mouse position 
