@@ -94,7 +94,6 @@ static bool rightPressActive = false;
 map<char*, char*> config_map;
 static bool connected = false;
 static bool is_client = false;
-static bool is_sender = false;
 static char* ip_address;
 static int port;
 static bool use_networking = false;
@@ -1281,48 +1280,35 @@ void GLUTRedrawMain(void)
       fprintf(stderr, "about to listen/send\n");
 
       if (is_client) {
-		  if (is_sender)
-		  {
-			  char my_string[11];
-			  sprintf(my_string, "%3d,%3d,%3d", (int) playerCarXPos, (int) playerCarYPos, (int)playerCarZPos);
-			  if (client_write(my_string, socket_desc) == 0) {
-				  fprintf(stderr, "Successful client send (probably)\n");
-			  }
-			  else {
-				  fprintf(stderr, "Couldn't send to server!\n");
-			  }
-			  is_sender = false;
-	      }
-	      else
-	      {
-			  char* data_received = client_read(socket_desc);
-			 if (data_received != NULL) {
-				 fprintf(stderr, "Got data: %s\n", data_received);
-				 is_sender = true;
-			 }
-			 else {
-				 fprintf(stderr, "No data... ;(\n");
-			 }
+		  char *my_string = "hello";
+		  //sprintf(my_string, "%3d,%3d,%3d", (int) playerCarXPos, (int) playerCarYPos, (int)playerCarZPos);
+		  if (client_write(my_string, socket_desc) == 0) {
+			  fprintf(stderr, "Successful client send (probably)\n");
 		  }
+		  else {
+			  fprintf(stderr, "Couldn't send to server!\n");
+		  }
+		  
+	     char* data_received = client_read(socket_desc);
+		 if (data_received != NULL) {
+			 fprintf(stderr, "Got data: %s\n", data_received);
+		 }
+		 else {
+			 fprintf(stderr, "No data... ;(\n");
+		 }
       }
       else {
-         if (is_sender)
-         {
+        
 			 char* data = "stuff";
 			server_write(data, strlen(data));
-			is_sender = false;
-		}
-		else
-		{	
+	
 			char* data_received = server_receive(socket_desc);
 			 if (data_received != NULL) {
 				 fprintf(stderr, "Got data: [%s]\n", data_received);
-				  is_sender = true;
 			 }
 			 else {
 				 fprintf(stderr, "No data... ;(\n");
-			 }
-		}
+			}
       }
   }
 }    
@@ -1635,11 +1621,9 @@ map<char*, char*> create_config() {
         if (!strcmp(iter->first, "client")) {
             if (!strcmp(iter->second, "1")) {
                 is_client = true;
-                is_sender = true;
             }
             else {
                 is_client = false;
-                is_sender = false;
             }
         }
         
