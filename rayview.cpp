@@ -744,11 +744,7 @@ void Collision(R3Scene *scene, R3Node *node)
 			playerCarZPos -= carSpeed * cos(toRads(carAngle)) * 0.1;
 			
 			//Update car speed
-			carSpeed = carSpeed - carAcceleration*0.1;
-			if (carSpeed < 0.0)
-			{
-				carSpeed = 0.0;
-			}
+			carSpeed = 0;
 		}
 	}
 	// Draw children nodes
